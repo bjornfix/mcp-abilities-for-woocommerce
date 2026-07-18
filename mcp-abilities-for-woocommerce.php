@@ -50,6 +50,16 @@ function mcp_wc_get_currency_symbol(): string {
 }
 
 /**
+ * Replace kr/kr symbol with NOK for clarity on Norwegian stores.
+ */
+add_filter( 'woocommerce_currency_symbol', function ( $symbol, $currency ) {
+	if ( 'NOK' === $currency ) {
+		return 'NOK';
+	}
+	return $symbol;
+}, 10, 2 );
+
+/**
  * WC order status slugs for input (without wc- prefix), derived from WC's registered statuses.
  *
  * @return array<int,string>

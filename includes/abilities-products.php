@@ -98,8 +98,9 @@ function mcp_wc_register_products_query(): void {
 				'stock_status'      => array( 'type' => 'string', 'enum' => array( 'instock', 'outofstock', 'onbackorder' ) ),
 				'category_id'       => array( 'type' => 'integer', 'description' => 'Filter by product category ID.' ),
 				'tag_id'            => array( 'type' => 'integer', 'description' => 'Filter by product tag ID.' ),
-				'low_stock'         => array( 'type' => 'boolean', 'description' => 'Only return products with low stock (manage_stock=true and quantity below threshold).' ),
-				'page'              => array( 'type' => 'integer', 'default' => 1, 'minimum' => 1 ),
+			'low_stock'         => array( 'type' => 'boolean', 'description' => 'Only return products with low stock (manage_stock=true and quantity below threshold).' ),
+			'date_after'        => array( 'type' => 'string', 'format' => 'date-time', 'description' => 'Filter products created after this date.' ),
+			'page'              => array( 'type' => 'integer', 'default' => 1, 'minimum' => 1 ),
 				'per_page'          => array( 'type' => 'integer', 'default' => 10, 'minimum' => 1, 'maximum' => 100 ),
 			),
 			'additionalProperties' => false,
@@ -159,6 +160,9 @@ function mcp_wc_register_products_query(): void {
 			}
 			if ( ! empty( $input['low_stock'] ) ) {
 				$args['low_in_stock'] = true;
+			}
+			if ( ! empty( $input['date_after'] ) ) {
+				$args['date_created'] = sanitize_text_field( $input['date_after'] );
 			}
 
 			$product_type_alias = $input['product_type_alias'] ?? null;
@@ -232,6 +236,7 @@ function mcp_wc_register_product_create(): void {
 					'description' => 'Product type. Use the WC type name directly for extension types (subscription, booking, bundle, etc).',
 				),
 				'name'               => array( 'type' => 'string' ),
+				'slug'               => array( 'type' => 'string', 'description' => 'URL slug. Auto-generated from name if omitted.' ),
 				'sku'                => array( 'type' => 'string' ),
 				'regular_price'      => array( 'type' => 'string', 'pattern' => '^(?:-?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)|)$' ),
 				'sale_price'         => array( 'type' => 'string', 'pattern' => '^(?:-?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)|)$' ),
@@ -334,6 +339,9 @@ function mcp_wc_register_product_create(): void {
 
 			$product->set_name( sanitize_text_field( $input['name'] ) );
 
+			if ( isset( $input['slug'] ) ) {
+				$product->set_slug( sanitize_title( $input['slug'] ) );
+			}
 			if ( isset( $input['sku'] ) ) {
 				$product->set_sku( sanitize_text_field( $input['sku'] ) );
 			}
@@ -523,9 +531,10 @@ function mcp_wc_register_product_update(): void {
 		'input_schema'        => array(
 			'type'                 => 'object',
 			'properties'           => array(
-				'id'                 => array( 'type' => 'integer', 'minimum' => 1 ),
-				'name'               => array( 'type' => 'string' ),
-				'sku'                => array( 'type' => 'string' ),
+			'id'                 => array( 'type' => 'integer', 'minimum' => 1 ),
+			'name'               => array( 'type' => 'string' ),
+			'slug'               => array( 'type' => 'string', 'description' => 'URL slug. Auto-generated from name if omitted.' ),
+			'sku'                => array( 'type' => 'string' ),
 				'regular_price'      => array( 'type' => 'string', 'pattern' => '^(?:-?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)|)$' ),
 				'sale_price'         => array( 'type' => 'string', 'pattern' => '^(?:-?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)|)$' ),
 				'description'        => array( 'type' => 'string' ),
@@ -609,6 +618,9 @@ function mcp_wc_register_product_update(): void {
 
 			if ( isset( $input['name'] ) ) {
 				$product->set_name( sanitize_text_field( $input['name'] ) );
+			}
+			if ( isset( $input['slug'] ) ) {
+				$product->set_slug( sanitize_title( $input['slug'] ) );
 			}
 			if ( isset( $input['sku'] ) ) {
 				$product->set_sku( sanitize_text_field( $input['sku'] ) );

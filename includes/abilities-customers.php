@@ -17,6 +17,7 @@ function mcp_wc_register_customer_abilities(): void {
 	mcp_wc_register_customers_query();
 	mcp_wc_register_customer_create();
 	mcp_wc_register_customer_update();
+	mcp_wc_register_customer_delete();
 }
 
 // ─── Customers Query ─────────────────────────────────────────────────────────
@@ -341,6 +342,58 @@ function mcp_wc_register_customer_update(): void {
 		},
 		'meta'                => array(
 			'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => false ),
+		),
+	) );
+}
+
+// ─── Customer Delete ─────────────────────────────────────────────────────────
+
+function mcp_wc_register_customer_delete(): void {
+	mcp_wc_register_ability( 'woocommerce/customer-delete', array(
+		'label'               => 'Delete customer',
+		'description'         => 'Permanently delete a customer account.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'id'          => array( 'type' => 'integer', 'minimum' => 1 ),
+				'reassign_to' => array( 'type' => 'integer', 'description' => 'User ID to reassign posts and links to.' ),
+			),
+			'required'             => array( 'id' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array(
+				'deleted' => array( 'type' => 'boolean' ),
+				'id'      => array( 'type' => 'integer' ),
+			),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! current_user_can( 'delete_users' ) ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$user_id = (int) $input['id'];
+			$user = get_userdata( $user_id );
+			if ( ! $user ) {
+				return array( 'error' => 'User not found.' );
+			}
+
+			$reassign = isset( $input['reassign_to'] ) ? (int) $input['reassign_to'] : null;
+			$result   = wp_delete_user( $user_id, $reassign );
+
+			return array(
+				'deleted' => (bool) $result,
+				'id'      => $user_id,
+			);
+		},
+		'permission_callback' => function (): bool {
+			return current_user_can( 'delete_users' );
+		},
+		'meta'                => array(
+			'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => true ),
 		),
 	) );
 }

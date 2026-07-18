@@ -478,9 +478,25 @@ function mcp_wc_register_product_create(): void {
 			$product_id = $product->save();
 
 			// Ensure frontend visibility: WC 10.9 set_catalog_visibility does not reliably persist _visibility meta
-			$visibility = sanitize_text_field( $input['catalog_visibility'] ?? 'visible' );
-			update_post_meta( $product_id, '_visibility', $visibility );
-			wp_set_object_terms( $product_id, array( $visibility ), 'product_visibility' );
+		$visibility = sanitize_text_field( $input['catalog_visibility'] ?? 'visible' );
+		update_post_meta( $product_id, '_visibility', $visibility );
+
+		// Product visibility taxonomy: remove exclusion terms to make product visible.
+		// WC does NOT have a 'visible' term — visibility is achieved by removing exclude-from-catalog and exclude-from-search.
+		$remove_terms = array( 'exclude-from-catalog', 'exclude-from-search' );
+		if ( 'hidden' === $visibility ) {
+			wp_set_object_terms( $product_id, 'exclude-from-catalog', 'product_visibility' );
+			wp_set_object_terms( $product_id, 'exclude-from-search', 'product_visibility', true );
+		} elseif ( 'catalog' === $visibility ) {
+			wp_remove_object_terms( $product_id, 'exclude-from-catalog', 'product_visibility' );
+			wp_set_object_terms( $product_id, 'exclude-from-search', 'product_visibility', true );
+		} elseif ( 'search' === $visibility ) {
+			wp_set_object_terms( $product_id, 'exclude-from-catalog', 'product_visibility' );
+			wp_remove_object_terms( $product_id, 'exclude-from-search', 'product_visibility' );
+		} else {
+			// 'visible' — the default. Remove all exclusion terms so the product appears everywhere.
+			wp_remove_object_terms( $product_id, $remove_terms, 'product_visibility' );
+		}
 
 			if ( isset( $input['category_ids'] ) && is_array( $input['category_ids'] ) ) {
 				wp_set_object_terms( $product_id, array_map( 'absint', $input['category_ids'] ), 'product_cat' );
@@ -760,7 +776,21 @@ function mcp_wc_register_product_update(): void {
 			if ( isset( $input['catalog_visibility'] ) ) {
 				$visibility = sanitize_text_field( $input['catalog_visibility'] );
 				update_post_meta( $product->get_id(), '_visibility', $visibility );
-				wp_set_object_terms( $product->get_id(), array( $visibility ), 'product_visibility' );
+
+				// Product visibility taxonomy: remove exclusion terms to make product visible.
+				$remove_terms = array( 'exclude-from-catalog', 'exclude-from-search' );
+				if ( 'hidden' === $visibility ) {
+					wp_set_object_terms( $product->get_id(), 'exclude-from-catalog', 'product_visibility' );
+					wp_set_object_terms( $product->get_id(), 'exclude-from-search', 'product_visibility', true );
+				} elseif ( 'catalog' === $visibility ) {
+					wp_remove_object_terms( $product->get_id(), 'exclude-from-catalog', 'product_visibility' );
+					wp_set_object_terms( $product->get_id(), 'exclude-from-search', 'product_visibility', true );
+				} elseif ( 'search' === $visibility ) {
+					wp_set_object_terms( $product->get_id(), 'exclude-from-catalog', 'product_visibility' );
+					wp_remove_object_terms( $product->get_id(), 'exclude-from-search', 'product_visibility' );
+				} else {
+					wp_remove_object_terms( $product->get_id(), $remove_terms, 'product_visibility' );
+				}
 			}
 
 			if ( isset( $input['category_ids'] ) && is_array( $input['category_ids'] ) ) {

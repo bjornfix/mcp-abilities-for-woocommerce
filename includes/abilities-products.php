@@ -1557,7 +1557,7 @@ function mcp_wc_register_attributes_query(): void {
 }
 
 function mcp_wc_format_attribute( $attribute ): array {
-	if ( is_object( $attribute ) ) {
+	if ( is_object( $attribute ) && ! empty( $attribute->attribute_id ) ) {
 		return array(
 			'id'           => (int) $attribute->attribute_id,
 			'name'         => $attribute->attribute_label,
@@ -1853,7 +1853,12 @@ function mcp_wc_register_attribute_create(): void {
 			}
 
 			$attribute = wc_get_attribute( $attribute_id );
-			return array( 'attribute' => mcp_wc_format_attribute( $attribute ) );
+			if ( ! $attribute || ( is_object( $attribute ) && empty( $attribute->attribute_id ) ) ) {
+				// Re-fetch after cache flush
+				delete_transient( 'wc_attribute_taxonomies' );
+				$attribute = wc_get_attribute( $attribute_id );
+			}
+			return array( 'attribute' => $attribute ? mcp_wc_format_attribute( $attribute ) : array( 'id' => $attribute_id, 'name' => $name, 'slug' => $slug ) );
 		},
 		'permission_callback' => function (): bool {
 			return current_user_can( 'manage_product_terms' );

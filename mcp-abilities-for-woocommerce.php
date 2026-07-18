@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities for WooCommerce
  * Plugin URI: https://devenia.com/plugins/mcp-abilities-for-woocommerce/
  * Description: Comprehensive WooCommerce abilities for MCP. Products, orders, coupons, customers, reports, settings, reviews, shipping, tax, and webhooks.
- * Version: 1.4.0
+ * Version: 1.4.1
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -172,18 +172,18 @@ function mcp_wc_format_product( \WC_Product $product ): array {
 		'featured_image_id'  => $product->get_image_id(),
 		'gallery_image_ids'  => $product->get_gallery_image_ids(),
 		'downloads'          => mcp_wc_format_downloads( $product ),
-		'upsell_ids'           => $product->get_upsell_ids(),
-		'cross_sell_ids'       => $product->get_cross_sell_ids(),
+		'upsell_ids'           => array_map( 'absint', $product->get_upsell_ids() ),
+		'cross_sell_ids'       => array_map( 'absint', $product->get_cross_sell_ids() ),
 		'tax_status'           => $product->get_tax_status(),
 		'tax_class'            => $product->get_tax_class(),
 		'shipping_class'       => $product->get_shipping_class(),
-		'shipping_class_id'    => $product->get_shipping_class_id(),
-		'sold_individually'    => $product->get_sold_individually(),
+		'shipping_class_id'    => $product->get_shipping_class_id() ? (int) $product->get_shipping_class_id() : null,
+		'sold_individually'    => 'yes' === $product->get_sold_individually(),
 		'backorders'           => $product->get_backorders(),
-		'low_stock_amount'     => $product->get_low_stock_amount(),
-		'reviews_allowed'      => $product->get_reviews_allowed(),
-		'purchase_note'        => $product->get_purchase_note(),
-		'menu_order'           => $product->get_menu_order(),
+		'low_stock_amount'     => '' !== $product->get_low_stock_amount() ? (int) $product->get_low_stock_amount() : null,
+		'reviews_allowed'      => (bool) $product->get_reviews_allowed(),
+		'purchase_note'        => $product->get_purchase_note() ?: '',
+		'menu_order'           => (int) $product->get_menu_order(),
 		'date_on_sale_from'    => mcp_wc_date_to_iso( $product->get_date_on_sale_from() ),
 		'date_on_sale_to'      => mcp_wc_date_to_iso( $product->get_date_on_sale_to() ),
 		'total_sales'          => (int) $product->get_total_sales(),

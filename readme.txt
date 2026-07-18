@@ -4,7 +4,7 @@ Tags: woocommerce, mcp, api, automation, ecommerce
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.0.4
+Stable tag: 1.0.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -98,6 +98,10 @@ This add-on plugin extends the MCP ecosystem with comprehensive WooCommerce func
 5. The abilities are now available via the MCP endpoint
 
 == Changelog ==
+
+= 1.0.5 =
+* Register on init:0 to ensure expanded schemas take precedence over WooCommerce core abilities.
+* Remove wp_has_ability() guard — register unconditionally.
 
 = 1.0.4 =
 * Register abilities at priority 1 so expanded schemas take precedence over WooCommerce core's built-in abilities.

@@ -50,13 +50,19 @@ function mcp_wc_get_currency_symbol(): string {
 }
 
 /**
- * Replace kr/kr symbol with NOK for clarity on Norwegian stores.
+ * Allow per-site currency symbol overrides via the 'mcp_wc_currency_symbol_overrides' option.
+ * Store as JSON object, e.g. {"NOK":"NOK","SEK":"SEK"}.
  */
 add_filter( 'woocommerce_currency_symbol', function ( $symbol, $currency ) {
-	if ( 'NOK' === $currency ) {
-		return 'NOK';
+	$overrides = get_option( 'mcp_wc_currency_symbol_overrides', '' );
+	if ( ! is_string( $overrides ) || '' === $overrides ) {
+		return $symbol;
 	}
-	return $symbol;
+	$map = json_decode( $overrides, true );
+	if ( ! is_array( $map ) ) {
+		return $symbol;
+	}
+	return $map[ $currency ] ?? $symbol;
 }, 10, 2 );
 
 /**

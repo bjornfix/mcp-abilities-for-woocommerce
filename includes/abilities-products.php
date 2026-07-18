@@ -271,7 +271,20 @@ function mcp_wc_register_product_create(): void {
 					),
 					'description' => 'Downloadable files for the product. Providing this array REPLACES all existing downloadable files.',
 				),
-				'attributes'         => array( 'type' => 'array', 'items' => array(
+				'upsell_ids'         => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Product IDs to show as upsells.' ),
+			'cross_sell_ids'     => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Product IDs to show as cross-sells.' ),
+			'date_on_sale_from'  => array( 'type' => 'string', 'format' => 'date-time', 'description' => 'Start date for the sale price.' ),
+			'date_on_sale_to'    => array( 'type' => 'string', 'format' => 'date-time', 'description' => 'End date for the sale price.' ),
+			'tax_status'         => array( 'type' => 'string', 'enum' => array( 'taxable', 'shipping', 'none' ), 'description' => 'Tax status of the product.' ),
+			'tax_class'          => array( 'type' => 'string', 'description' => 'Tax class slug (e.g. standard, reduced-rate, zero-rate).' ),
+			'shipping_class_id'  => array( 'type' => 'integer', 'description' => 'Shipping class term ID.' ),
+			'sold_individually'  => array( 'type' => 'boolean', 'description' => 'Limit purchases to 1 per order.' ),
+			'backorders'         => array( 'type' => 'string', 'enum' => array( 'no', 'notify', 'yes' ), 'description' => 'Backorder policy.' ),
+			'low_stock_amount'   => array( 'type' => 'integer', 'description' => 'Low stock threshold when manage_stock is enabled.' ),
+			'reviews_allowed'    => array( 'type' => 'boolean', 'description' => 'Allow customer reviews.' ),
+			'purchase_note'      => array( 'type' => 'string', 'description' => 'Note sent to customer after purchase.' ),
+			'menu_order'         => array( 'type' => 'integer', 'description' => 'Custom ordering position.' ),
+			'attributes'         => array( 'type' => 'array', 'items' => array(
 					'type'       => 'object',
 					'properties' => array(
 						'name'      => array( 'type' => 'string' ),
@@ -417,6 +430,40 @@ function mcp_wc_register_product_create(): void {
 				$product->set_attributes( $attrs );
 			}
 
+			$product_params = array(
+				'upsell_ids'         => 'set_upsell_ids',
+				'cross_sell_ids'     => 'set_cross_sell_ids',
+				'date_on_sale_from'  => 'set_date_on_sale_from',
+				'date_on_sale_to'    => 'set_date_on_sale_to',
+				'tax_status'         => 'set_tax_status',
+				'tax_class'          => 'set_tax_class',
+				'shipping_class_id'  => 'set_shipping_class_id',
+				'sold_individually'  => 'set_sold_individually',
+				'backorders'         => 'set_backorders',
+				'low_stock_amount'   => 'set_low_stock_amount',
+				'reviews_allowed'    => 'set_reviews_allowed',
+				'purchase_note'      => 'set_purchase_note',
+				'menu_order'         => 'set_menu_order',
+			);
+			foreach ( $product_params as $param => $method ) {
+				if ( isset( $input[ $param ] ) && method_exists( $product, $method ) ) {
+					if ( in_array( $param, array( 'upsell_ids', 'cross_sell_ids' ), true ) && is_array( $input[ $param ] ) ) {
+						$product->$method( array_map( 'absint', $input[ $param ] ) );
+					} elseif ( 'date_on_sale_from' === $param || 'date_on_sale_to' === $param ) {
+						$date = '' !== $input[ $param ] ? mcp_wc_parse_date( $input[ $param ] ) : null;
+						$product->$method( $date ? $date->getTimestamp() : '' );
+					} elseif ( 'tax_status' === $param || 'tax_class' === $param || 'backorders' === $param ) {
+						$product->$method( sanitize_text_field( $input[ $param ] ) );
+					} elseif ( 'purchase_note' === $param ) {
+						$product->$method( wp_kses_post( $input[ $param ] ) );
+					} elseif ( 'shipping_class_id' === $param || 'low_stock_amount' === $param || 'menu_order' === $param ) {
+						$product->$method( (int) $input[ $param ] );
+					} else {
+						$product->$method( $input[ $param ] );
+					}
+				}
+			}
+
 			$product_id = $product->save();
 
 			if ( isset( $input['category_ids'] ) && is_array( $input['category_ids'] ) ) {
@@ -517,7 +564,20 @@ function mcp_wc_register_product_update(): void {
 					),
 					'description' => 'Downloadable files for the product. Providing this array REPLACES all existing downloadable files.',
 				),
-				'attributes'         => array( 'type' => 'array', 'items' => array(
+				'upsell_ids'         => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Product IDs to show as upsells.' ),
+			'cross_sell_ids'     => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Product IDs to show as cross-sells.' ),
+			'date_on_sale_from'  => array( 'type' => 'string', 'format' => 'date-time', 'description' => 'Start date for the sale price.' ),
+			'date_on_sale_to'    => array( 'type' => 'string', 'format' => 'date-time', 'description' => 'End date for the sale price.' ),
+			'tax_status'         => array( 'type' => 'string', 'enum' => array( 'taxable', 'shipping', 'none' ), 'description' => 'Tax status of the product.' ),
+			'tax_class'          => array( 'type' => 'string', 'description' => 'Tax class slug (e.g. standard, reduced-rate, zero-rate).' ),
+			'shipping_class_id'  => array( 'type' => 'integer', 'description' => 'Shipping class term ID.' ),
+			'sold_individually'  => array( 'type' => 'boolean', 'description' => 'Limit purchases to 1 per order.' ),
+			'backorders'         => array( 'type' => 'string', 'enum' => array( 'no', 'notify', 'yes' ), 'description' => 'Backorder policy.' ),
+			'low_stock_amount'   => array( 'type' => 'integer', 'description' => 'Low stock threshold when manage_stock is enabled.' ),
+			'reviews_allowed'    => array( 'type' => 'boolean', 'description' => 'Allow customer reviews.' ),
+			'purchase_note'      => array( 'type' => 'string', 'description' => 'Note sent to customer after purchase.' ),
+			'menu_order'         => array( 'type' => 'integer', 'description' => 'Custom ordering position.' ),
+			'attributes'         => array( 'type' => 'array', 'items' => array(
 					'type'       => 'object',
 					'properties' => array(
 						'name'      => array( 'type' => 'string' ),
@@ -634,6 +694,40 @@ function mcp_wc_register_product_update(): void {
 					$attrs[] = $attr;
 				}
 				$product->set_attributes( $attrs );
+			}
+
+			$product_params = array(
+				'upsell_ids'         => 'set_upsell_ids',
+				'cross_sell_ids'     => 'set_cross_sell_ids',
+				'date_on_sale_from'  => 'set_date_on_sale_from',
+				'date_on_sale_to'    => 'set_date_on_sale_to',
+				'tax_status'         => 'set_tax_status',
+				'tax_class'          => 'set_tax_class',
+				'shipping_class_id'  => 'set_shipping_class_id',
+				'sold_individually'  => 'set_sold_individually',
+				'backorders'         => 'set_backorders',
+				'low_stock_amount'   => 'set_low_stock_amount',
+				'reviews_allowed'    => 'set_reviews_allowed',
+				'purchase_note'      => 'set_purchase_note',
+				'menu_order'         => 'set_menu_order',
+			);
+			foreach ( $product_params as $param => $method ) {
+				if ( isset( $input[ $param ] ) && method_exists( $product, $method ) ) {
+					if ( in_array( $param, array( 'upsell_ids', 'cross_sell_ids' ), true ) && is_array( $input[ $param ] ) ) {
+						$product->$method( array_map( 'absint', $input[ $param ] ) );
+					} elseif ( 'date_on_sale_from' === $param || 'date_on_sale_to' === $param ) {
+						$date = '' !== $input[ $param ] ? mcp_wc_parse_date( $input[ $param ] ) : null;
+						$product->$method( $date ? $date->getTimestamp() : '' );
+					} elseif ( 'tax_status' === $param || 'tax_class' === $param || 'backorders' === $param ) {
+						$product->$method( sanitize_text_field( $input[ $param ] ) );
+					} elseif ( 'purchase_note' === $param ) {
+						$product->$method( wp_kses_post( $input[ $param ] ) );
+					} elseif ( 'shipping_class_id' === $param || 'low_stock_amount' === $param || 'menu_order' === $param ) {
+						$product->$method( (int) $input[ $param ] );
+					} else {
+						$product->$method( $input[ $param ] );
+					}
+				}
 			}
 
 			$product->save();

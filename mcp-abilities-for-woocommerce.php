@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities for WooCommerce
  * Plugin URI: https://devenia.com/plugins/mcp-abilities-for-woocommerce/
  * Description: Comprehensive WooCommerce abilities for MCP. Products, orders, coupons, customers, reports, settings, reviews, shipping, tax, and webhooks.
- * Version: 1.3.1
+ * Version: 1.4.0
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -172,6 +172,23 @@ function mcp_wc_format_product( \WC_Product $product ): array {
 		'featured_image_id'  => $product->get_image_id(),
 		'gallery_image_ids'  => $product->get_gallery_image_ids(),
 		'downloads'          => mcp_wc_format_downloads( $product ),
+		'upsell_ids'           => $product->get_upsell_ids(),
+		'cross_sell_ids'       => $product->get_cross_sell_ids(),
+		'tax_status'           => $product->get_tax_status(),
+		'tax_class'            => $product->get_tax_class(),
+		'shipping_class'       => $product->get_shipping_class(),
+		'shipping_class_id'    => $product->get_shipping_class_id(),
+		'sold_individually'    => $product->get_sold_individually(),
+		'backorders'           => $product->get_backorders(),
+		'low_stock_amount'     => $product->get_low_stock_amount(),
+		'reviews_allowed'      => $product->get_reviews_allowed(),
+		'purchase_note'        => $product->get_purchase_note(),
+		'menu_order'           => $product->get_menu_order(),
+		'date_on_sale_from'    => mcp_wc_date_to_iso( $product->get_date_on_sale_from() ),
+		'date_on_sale_to'      => mcp_wc_date_to_iso( $product->get_date_on_sale_to() ),
+		'total_sales'          => (int) $product->get_total_sales(),
+		'average_rating'       => (string) $product->get_average_rating(),
+		'rating_count'         => (int) $product->get_rating_count(),
 		'date_created'       => mcp_wc_date_to_iso( $product->get_date_created() ),
 		'date_created_gmt'   => mcp_wc_date_to_iso( $product->get_date_created(), true ),
 		'date_modified'      => mcp_wc_date_to_iso( $product->get_date_modified() ),
@@ -322,6 +339,23 @@ function mcp_wc_product_output_schema(): array {
 				),
 				'additionalProperties' => false,
 			) ),
+			'upsell_ids'          => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ),
+			'cross_sell_ids'      => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ),
+			'tax_status'          => array( 'type' => 'string', 'enum' => array( 'taxable', 'shipping', 'none' ) ),
+			'tax_class'           => array( 'type' => 'string' ),
+			'shipping_class'      => array( 'type' => 'string' ),
+			'shipping_class_id'   => array( 'type' => array( 'integer', 'null' ) ),
+			'sold_individually'   => array( 'type' => 'boolean' ),
+			'backorders'          => array( 'type' => 'string', 'enum' => array( 'no', 'notify', 'yes' ) ),
+			'low_stock_amount'    => array( 'type' => array( 'integer', 'null' ) ),
+			'reviews_allowed'     => array( 'type' => 'boolean' ),
+			'purchase_note'       => array( 'type' => 'string' ),
+			'menu_order'          => array( 'type' => 'integer' ),
+			'date_on_sale_from'   => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),
+			'date_on_sale_to'     => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),
+			'total_sales'         => array( 'type' => 'integer' ),
+			'average_rating'      => array( 'type' => 'string' ),
+			'rating_count'        => array( 'type' => 'integer' ),
 			'date_created'       => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),
 			'date_created_gmt'   => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),
 			'date_modified'      => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),

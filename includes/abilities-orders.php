@@ -172,10 +172,48 @@ function mcp_wc_register_order_create(): void {
 					'country'    => array( 'type' => 'string' ),
 				), 'additionalProperties' => false ),
 				'note'               => array( 'type' => 'string', 'description' => 'Optional order note.' ),
-				'payment_method'     => array( 'type' => 'string' ),
-				'payment_method_title' => array( 'type' => 'string' ),
-			),
-			'required'             => array( 'line_items' ),
+			'payment_method'     => array( 'type' => 'string' ),
+			'payment_method_title' => array( 'type' => 'string' ),
+			'coupon_lines'        => array( 'type' => 'array', 'items' => array(
+				'type'       => 'object',
+				'properties' => array(
+					'code'   => array( 'type' => 'string', 'description' => 'Coupon code to apply.' ),
+				),
+				'required'   => array( 'code' ),
+				'additionalProperties' => false,
+			), 'description' => 'Coupons to apply to the order.' ),
+			'fee_lines'           => array( 'type' => 'array', 'items' => array(
+				'type'       => 'object',
+				'properties' => array(
+					'name'   => array( 'type' => 'string' ),
+					'total'  => array( 'type' => 'string' ),
+					'tax_class' => array( 'type' => 'string' ),
+				),
+				'required'   => array( 'name', 'total' ),
+				'additionalProperties' => false,
+			), 'description' => 'Fee line items.' ),
+			'shipping_lines'      => array( 'type' => 'array', 'items' => array(
+				'type'       => 'object',
+				'properties' => array(
+					'method_title' => array( 'type' => 'string' ),
+					'method_id'    => array( 'type' => 'string' ),
+					'total'        => array( 'type' => 'string' ),
+				),
+				'required'   => array( 'method_title', 'total' ),
+				'additionalProperties' => false,
+			), 'description' => 'Shipping line items.' ),
+			'customer_note'       => array( 'type' => 'string', 'description' => 'Note from customer, visible on the order.' ),
+			'meta_data'           => array( 'type' => 'array', 'items' => array(
+				'type'       => 'object',
+				'properties' => array(
+					'key'   => array( 'type' => 'string' ),
+					'value' => array( 'type' => 'string' ),
+				),
+				'required'   => array( 'key', 'value' ),
+				'additionalProperties' => false,
+			), 'description' => 'Custom meta data for extensions.' ),
+		),
+		'required'             => array( 'line_items' ),
 			'additionalProperties' => false,
 		),
 		'output_schema'       => array(
@@ -233,11 +271,50 @@ function mcp_wc_register_order_create(): void {
 			if ( ! empty( $input['payment_method'] ) ) {
 				$order->set_payment_method( sanitize_text_field( $input['payment_method'] ) );
 			}
-			if ( ! empty( $input['payment_method_title'] ) ) {
-				$order->set_payment_method_title( sanitize_text_field( $input['payment_method_title'] ) );
-			}
+		if ( ! empty( $input['payment_method_title'] ) ) {
+			$order->set_payment_method_title( sanitize_text_field( $input['payment_method_title'] ) );
+		}
 
-			$order->calculate_totals();
+		if ( isset( $input['coupon_lines'] ) && is_array( $input['coupon_lines'] ) ) {
+			foreach ( $input['coupon_lines'] as $coupon ) {
+				$order->apply_coupon( sanitize_text_field( $coupon['code'] ) );
+			}
+		}
+
+		if ( isset( $input['fee_lines'] ) && is_array( $input['fee_lines'] ) ) {
+			foreach ( $input['fee_lines'] as $fee ) {
+				$item = new \WC_Order_Item_Fee();
+				$item->set_name( sanitize_text_field( $fee['name'] ) );
+				$item->set_total( sanitize_text_field( $fee['total'] ) );
+				if ( ! empty( $fee['tax_class'] ) ) {
+					$item->set_tax_class( sanitize_text_field( $fee['tax_class'] ) );
+				}
+				$order->add_item( $item );
+			}
+		}
+
+		if ( isset( $input['shipping_lines'] ) && is_array( $input['shipping_lines'] ) ) {
+			foreach ( $input['shipping_lines'] as $shipping ) {
+				$item = new \WC_Order_Item_Shipping();
+				$item->set_method_title( sanitize_text_field( $shipping['method_title'] ) );
+				$item->set_method_id( ! empty( $shipping['method_id'] ) ? sanitize_text_field( $shipping['method_id'] ) : '' );
+				$item->set_total( sanitize_text_field( $shipping['total'] ) );
+				$order->add_item( $item );
+			}
+		}
+
+		if ( isset( $input['meta_data'] ) && is_array( $input['meta_data'] ) ) {
+			foreach ( $input['meta_data'] as $meta ) {
+				$order->add_meta_data( sanitize_text_field( $meta['key'] ), sanitize_text_field( $meta['value'] ), true );
+			}
+			$order->save_meta_data();
+		}
+
+		if ( isset( $input['customer_note'] ) ) {
+			$order->set_customer_note( sanitize_textarea_field( $input['customer_note'] ) );
+		}
+
+		$order->calculate_totals();
 			$order->save();
 
 			if ( ! empty( $input['note'] ) ) {

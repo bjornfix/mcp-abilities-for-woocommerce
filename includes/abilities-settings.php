@@ -21,6 +21,7 @@ function mcp_wc_register_setting_abilities(): void {
 	mcp_wc_register_payment_gateways_query();
 	mcp_wc_register_webhooks_query();
 	mcp_wc_register_shipping_classes_query();
+	mcp_wc_register_tax_classes_query();
 	mcp_wc_register_webhook_create();
 	mcp_wc_register_webhook_update();
 	mcp_wc_register_webhook_delete();
@@ -555,7 +556,7 @@ function mcp_wc_register_webhook_create(): void {
 		},
 		'permission_callback' => 'mcp_wc_settings_permission',
 		'meta'                => array(
-			'annotations' => array( 'readonly' => false, 'destructive' => false, 'idempotent' => false ),
+			'annotations' => array( 'readonly' => true, 'destructive' => false, 'idempotent' => true ),
 		),
 	) );
 }
@@ -713,6 +714,53 @@ function mcp_wc_register_shipping_classes_query(): void {
 				'page'        => $page,
 				'per_page'    => $per_page,
 			);
+		},
+		'permission_callback' => 'mcp_wc_settings_permission',
+		'meta'                => array(
+			'annotations' => array( 'readonly' => true, 'destructive' => false, 'idempotent' => true ),
+		),
+	) );
+}
+
+// ─── Tax Classes ──────────────────────────────────────────────────────────────
+
+function mcp_wc_register_tax_classes_query(): void {
+	mcp_wc_register_ability( 'woocommerce/tax-classes-query', array(
+		'label'               => 'Query tax classes',
+		'description'         => 'List WooCommerce tax classes.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array(
+				'tax_classes' => array( 'type' => 'array', 'items' => array(
+					'type'       => 'object',
+					'properties' => array(
+						'slug' => array( 'type' => 'string' ),
+						'name' => array( 'type' => 'string' ),
+					),
+					'additionalProperties' => false,
+				) ),
+			),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! mcp_wc_settings_permission() ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$classes   = \WC_Tax::get_tax_classes();
+			$items     = array();
+			$items[]   = array( 'slug' => 'standard', 'name' => 'Standard' );
+			foreach ( $classes as $class ) {
+				$items[] = array( 'slug' => sanitize_title( $class ), 'name' => $class );
+			}
+
+			return array( 'tax_classes' => $items );
 		},
 		'permission_callback' => 'mcp_wc_settings_permission',
 		'meta'                => array(

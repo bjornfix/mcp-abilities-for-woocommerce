@@ -79,7 +79,7 @@ function mcp_wc_register_product_abilities(): void {
 // ─── Products Query ──────────────────────────────────────────────────────────
 
 function mcp_wc_register_products_query(): void {
-	mcp_wc_register_ability( 'woocommerce/products-query', array(
+	mcp_wc_register_ability( 'woocommerce-mcp/products-query', array(
 		'label'               => 'Query products',
 		'description'         => 'Find products by ID or common catalog filters.',
 		'category'            => 'site',
@@ -210,7 +210,7 @@ function mcp_wc_register_products_query(): void {
 // ─── Product Create ──────────────────────────────────────────────────────────
 
 function mcp_wc_register_product_create(): void {
-	mcp_wc_register_ability( 'woocommerce/product-create', array(
+	mcp_wc_register_ability( 'woocommerce-mcp/product-create', array(
 		'label'               => 'Create product',
 		'description'         => 'Create a product using supported catalog fields.',
 		'category'            => 'site',
@@ -421,7 +421,7 @@ function mcp_wc_register_product_create(): void {
 // ─── Product Update ──────────────────────────────────────────────────────────
 
 function mcp_wc_register_product_update(): void {
-	mcp_wc_register_ability( 'woocommerce/product-update', array(
+	mcp_wc_register_ability( 'woocommerce-mcp/product-update', array(
 		'label'               => 'Update product',
 		'description'         => 'Update an existing product using supported catalog fields.',
 		'category'            => 'site',
@@ -599,7 +599,7 @@ function mcp_wc_register_product_update(): void {
 // ─── Product Delete ──────────────────────────────────────────────────────────
 
 function mcp_wc_register_product_delete(): void {
-	mcp_wc_register_ability( 'woocommerce/product-delete', array(
+	mcp_wc_register_ability( 'woocommerce-mcp/product-delete', array(
 		'label'               => 'Delete product',
 		'description'         => 'Delete, trash, or restore a product.',
 		'category'            => 'site',

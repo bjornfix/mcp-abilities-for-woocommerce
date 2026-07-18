@@ -35,7 +35,7 @@ function mcp_wc_get_order_or_error( int $id, string $action ): array {
 // ─── Orders Query ────────────────────────────────────────────────────────────
 
 function mcp_wc_register_orders_query(): void {
-	mcp_wc_register_ability( 'woocommerce/orders-query', array(
+	mcp_wc_register_ability( 'woocommerce-mcp/orders-query', array(
 		'label'               => 'Query orders',
 		'description'         => 'Find orders by ID or common order filters.',
 		'category'            => 'site',
@@ -255,7 +255,7 @@ function mcp_wc_register_order_create(): void {
 // ─── Order Update Status ─────────────────────────────────────────────────────
 
 function mcp_wc_register_order_update_status(): void {
-	mcp_wc_register_ability( 'woocommerce/order-update-status', array(
+	mcp_wc_register_ability( 'woocommerce-mcp/order-update-status', array(
 		'label'               => 'Update order status',
 		'description'         => 'Update an order status.',
 		'category'            => 'site',
@@ -300,7 +300,7 @@ function mcp_wc_register_order_update_status(): void {
 // ─── Order Add Note ──────────────────────────────────────────────────────────
 
 function mcp_wc_register_order_add_note(): void {
-	mcp_wc_register_ability( 'woocommerce/order-add-note', array(
+	mcp_wc_register_ability( 'woocommerce-mcp/order-add-note', array(
 		'label'               => 'Add order note',
 		'description'         => 'Add a note to an order.',
 		'category'            => 'site',

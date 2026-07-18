@@ -19,6 +19,9 @@ function mcp_wc_register_order_abilities(): void {
 	mcp_wc_register_order_update_status();
 	mcp_wc_register_order_add_note();
 	mcp_wc_register_order_delete();
+	mcp_wc_register_order_refunds_query();
+	mcp_wc_register_order_refund_create();
+	mcp_wc_register_order_notes_query();
 }
 
 function mcp_wc_get_order_or_error( int $id, string $action ): array {
@@ -377,6 +380,275 @@ function mcp_wc_register_order_delete(): void {
 		},
 		'meta'                => array(
 			'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => true ),
+		),
+	) );
+}
+
+// ─── Order Refunds Query ─────────────────────────────────────────────────────
+
+function mcp_wc_format_refund( \WC_Order_Refund $refund ): array {
+	$items = array();
+	foreach ( $refund->get_items() as $item ) {
+		$items[] = array(
+			'id'           => $item->get_id(),
+			'name'         => $item->get_name(),
+			'product_id'   => $item->get_product_id(),
+			'quantity'     => $item->get_quantity(),
+			'refund_total' => $refund->get_item_total( $item, false, false ),
+		);
+	}
+
+	return array(
+		'id'           => $refund->get_id(),
+		'reason'       => $refund->get_reason() ?: '',
+		'amount'       => $refund->get_amount(),
+		'date_created' => mcp_wc_date_to_iso( $refund->get_date_created() ),
+		'refunded_by'  => (int) $refund->get_refunded_by(),
+		'line_items'   => $items,
+	);
+}
+
+function mcp_wc_register_order_refunds_query(): void {
+	mcp_wc_register_ability( 'woocommerce/order-refunds-query', array(
+		'label'               => 'Query order refunds',
+		'description'         => 'List refunds for an order.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'order_id'  => array( 'type' => 'integer', 'minimum' => 1 ),
+				'refund_id' => array( 'type' => 'integer', 'minimum' => 1 ),
+			),
+			'required'             => array( 'order_id' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array(
+				'refunds' => array( 'type' => 'array', 'items' => array(
+					'type'       => 'object',
+					'properties' => array(
+						'id'              => array( 'type' => 'integer' ),
+						'reason'          => array( 'type' => 'string' ),
+						'amount'          => array( 'type' => 'string' ),
+						'date_created'    => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),
+						'refunded_by'     => array( 'type' => 'integer' ),
+						'line_items'      => array( 'type' => 'array', 'items' => array(
+							'type'       => 'object',
+							'properties' => array(
+								'id'           => array( 'type' => 'integer' ),
+								'name'         => array( 'type' => 'string' ),
+								'product_id'   => array( 'type' => 'integer' ),
+								'quantity'     => array( 'type' => 'integer' ),
+								'refund_total' => array( 'type' => 'string' ),
+							),
+							'additionalProperties' => false,
+						) ),
+					),
+					'additionalProperties' => false,
+				) ),
+			),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! current_user_can( 'edit_shop_orders' ) ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$order = wc_get_order( (int) $input['order_id'] );
+			if ( ! $order ) {
+				return array( 'error' => 'Order not found.' );
+			}
+
+			if ( isset( $input['refund_id'] ) ) {
+				$refund = wc_get_order( (int) $input['refund_id'] );
+				if ( ! $refund || 'shop_order_refund' !== $refund->get_type() ) {
+					return array( 'refunds' => array() );
+				}
+				return array( 'refunds' => array( mcp_wc_format_refund( $refund ) ) );
+			}
+
+			$refunds = array();
+			foreach ( $order->get_refunds() as $refund ) {
+				$refunds[] = mcp_wc_format_refund( $refund );
+			}
+			return array( 'refunds' => $refunds );
+		},
+		'permission_callback' => function (): bool {
+			return current_user_can( 'edit_shop_orders' );
+		},
+		'meta'                => array(
+			'annotations' => array( 'readonly' => true, 'destructive' => false, 'idempotent' => true ),
+		),
+	) );
+}
+
+// ─── Order Refund Create ─────────────────────────────────────────────────────
+
+function mcp_wc_register_order_refund_create(): void {
+	mcp_wc_register_ability( 'woocommerce/order-refund-create', array(
+		'label'               => 'Create order refund',
+		'description'         => 'Create a refund for an order. Supports line-item and amount-based refunds.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'order_id' => array( 'type' => 'integer', 'minimum' => 1 ),
+				'amount'   => array( 'type' => 'string', 'description' => 'Refund amount. If omitted, refunds all line items fully.' ),
+				'reason'   => array( 'type' => 'string', 'description' => 'Reason for the refund.' ),
+				'line_items' => array( 'type' => 'array', 'items' => array(
+					'type'       => 'object',
+					'properties' => array(
+						'id'       => array( 'type' => 'integer', 'description' => 'Order line item ID.' ),
+						'quantity' => array( 'type' => 'integer', 'minimum' => 1, 'default' => 1 ),
+						'total'    => array( 'type' => 'string', 'description' => 'Amount to refund for this item.' ),
+					),
+					'required'   => array( 'id' ),
+					'additionalProperties' => false,
+				) ),
+			),
+			'required'             => array( 'order_id' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array(
+				'refund' => array( 'type' => 'object' ),
+			),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! current_user_can( 'edit_shop_orders' ) ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$order = wc_get_order( (int) $input['order_id'] );
+			if ( ! $order ) {
+				return array( 'error' => 'Order not found.' );
+			}
+
+			$args = array();
+			if ( isset( $input['amount'] ) ) {
+				$args['amount'] = (float) $input['amount'];
+			}
+			if ( isset( $input['reason'] ) ) {
+				$args['reason'] = sanitize_text_field( $input['reason'] );
+			}
+			if ( isset( $input['line_items'] ) && is_array( $input['line_items'] ) ) {
+				$args['line_items'] = array();
+				foreach ( $input['line_items'] as $item ) {
+					$line_item = array( 'refund_total' => 0, 'qty' => isset( $item['quantity'] ) ? (int) $item['quantity'] : 1 );
+					if ( isset( $item['total'] ) ) {
+						$line_item['refund_total'] = (float) $item['total'];
+					}
+					$args['line_items'][ (int) $item['id'] ] = $line_item;
+				}
+			}
+
+			$refund = wc_create_refund( $args );
+			if ( is_wp_error( $refund ) ) {
+				return array( 'error' => $refund->get_error_message() );
+			}
+
+			return array( 'refund' => mcp_wc_format_refund( $refund ) );
+		},
+		'permission_callback' => function (): bool {
+			return current_user_can( 'edit_shop_orders' );
+		},
+		'meta'                => array(
+			'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => false ),
+		),
+	) );
+}
+
+// ─── Order Notes Query ───────────────────────────────────────────────────────
+
+function mcp_wc_register_order_notes_query(): void {
+	mcp_wc_register_ability( 'woocommerce/order-notes-query', array(
+		'label'               => 'Query order notes',
+		'description'         => 'List notes for an order.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'order_id' => array( 'type' => 'integer', 'minimum' => 1 ),
+				'type'     => array( 'type' => 'string', 'enum' => array( 'any', 'customer', 'internal' ), 'default' => 'any' ),
+				'page'     => array( 'type' => 'integer', 'default' => 1, 'minimum' => 1 ),
+				'per_page' => array( 'type' => 'integer', 'default' => 25, 'minimum' => 1, 'maximum' => 100 ),
+			),
+			'required'             => array( 'order_id' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array(
+				'notes'       => array( 'type' => 'array', 'items' => array(
+					'type'       => 'object',
+					'properties' => array(
+						'id'           => array( 'type' => 'integer' ),
+						'content'      => array( 'type' => 'string' ),
+						'date_created' => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),
+						'customer_note' => array( 'type' => 'boolean' ),
+						'added_by'     => array( 'type' => 'string' ),
+					),
+					'additionalProperties' => false,
+				) ),
+				'total_pages' => array( 'type' => 'integer' ),
+				'page'        => array( 'type' => 'integer' ),
+				'per_page'    => array( 'type' => 'integer' ),
+			),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! current_user_can( 'edit_shop_orders' ) ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$order = wc_get_order( (int) $input['order_id'] );
+			if ( ! $order ) {
+				return array( 'error' => 'Order not found.' );
+			}
+
+			$type = $input['type'] ?? 'any';
+			$args = array(
+				'order_id' => $order->get_id(),
+				'type'     => 'any' === $type ? 'order_note' : ( 'customer' === $type ? 'customer' : 'internal' ),
+				'limit'    => min( 100, max( 1, (int) ( $input['per_page'] ?? 25 ) ) ),
+				'offset'   => ( (int) ( $input['page'] ?? 1 ) - 1 ) * min( 100, max( 1, (int) ( $input['per_page'] ?? 25 ) ) ),
+			);
+
+			if ( 'any' === $type ) {
+				$notes = wc_get_order_notes( $args );
+				$total = count( wc_get_order_notes( array( 'order_id' => $order->get_id(), 'type' => 'order_note', 'limit' => 9999 ) ) );
+			} else {
+				$notes = wc_get_order_notes( $args );
+				$total = count( wc_get_order_notes( array( 'order_id' => $order->get_id(), 'type' => $args['type'], 'limit' => 9999 ) ) );
+			}
+
+			$per_page = (int) ( $input['per_page'] ?? 25 );
+			$items = array();
+			foreach ( $notes as $note ) {
+				$items[] = array(
+					'id'            => (int) $note->id,
+					'content'       => $note->content,
+					'date_created'  => $note->date_created->date( 'Y-m-d\TH:i:s' ),
+					'customer_note' => (bool) $note->customer_note,
+					'added_by'      => $note->added_by,
+				);
+			}
+
+			return array(
+				'notes'       => $items,
+				'total_pages' => max( 1, (int) ceil( $total / $per_page ) ),
+				'page'        => (int) ( $input['page'] ?? 1 ),
+				'per_page'    => $per_page,
+			);
+		},
+		'permission_callback' => function (): bool {
+			return current_user_can( 'edit_shop_orders' );
+		},
+		'meta'                => array(
+			'annotations' => array( 'readonly' => true, 'destructive' => false, 'idempotent' => true ),
 		),
 	) );
 }

@@ -15,6 +15,8 @@ function mcp_wc_register_customer_abilities(): void {
 	}
 
 	mcp_wc_register_customers_query();
+	mcp_wc_register_customer_create();
+	mcp_wc_register_customer_update();
 }
 
 // ─── Customers Query ─────────────────────────────────────────────────────────
@@ -140,6 +142,205 @@ function mcp_wc_register_customers_query(): void {
 		},
 		'meta'                => array(
 			'annotations' => array( 'readonly' => true, 'destructive' => false, 'idempotent' => true ),
+		),
+	) );
+}
+
+// ─── Customer Create ─────────────────────────────────────────────────────────
+
+function mcp_wc_register_customer_create(): void {
+	mcp_wc_register_ability( 'woocommerce/customer-create', array(
+		'label'               => 'Create customer',
+		'description'         => 'Create a new customer with billing and shipping details.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'email'      => array( 'type' => 'string', 'format' => 'email' ),
+				'first_name' => array( 'type' => 'string' ),
+				'last_name'  => array( 'type' => 'string' ),
+				'username'   => array( 'type' => 'string', 'description' => 'Auto-generated from email if omitted.' ),
+				'password'   => array( 'type' => 'string', 'description' => 'Auto-generated if omitted.' ),
+				'billing'    => array( 'type' => 'object', 'properties' => array(
+					'first_name' => array( 'type' => 'string' ), 'last_name' => array( 'type' => 'string' ),
+					'company'    => array( 'type' => 'string' ), 'address_1'  => array( 'type' => 'string' ),
+					'address_2'  => array( 'type' => 'string' ), 'city'       => array( 'type' => 'string' ),
+					'state'      => array( 'type' => 'string' ), 'postcode'   => array( 'type' => 'string' ),
+					'country'    => array( 'type' => 'string' ), 'phone'      => array( 'type' => 'string' ),
+					'email'      => array( 'type' => 'string', 'format' => 'email' ),
+				), 'additionalProperties' => false ),
+				'shipping'   => array( 'type' => 'object', 'properties' => array(
+					'first_name' => array( 'type' => 'string' ), 'last_name' => array( 'type' => 'string' ),
+					'company'    => array( 'type' => 'string' ), 'address_1'  => array( 'type' => 'string' ),
+					'address_2'  => array( 'type' => 'string' ), 'city'       => array( 'type' => 'string' ),
+					'state'      => array( 'type' => 'string' ), 'postcode'   => array( 'type' => 'string' ),
+					'country'    => array( 'type' => 'string' ),
+				), 'additionalProperties' => false ),
+			),
+			'required'             => array( 'email' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array(
+				'customer' => array( 'type' => 'object' ),
+			),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! current_user_can( 'create_users' ) ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$email = sanitize_email( $input['email'] );
+			if ( email_exists( $email ) ) {
+				return array( 'error' => 'A user with this email already exists.' );
+			}
+
+			$username = ! empty( $input['username'] ) ? sanitize_user( $input['username'] ) : sanitize_user( current( explode( '@', $email ) ) );
+			$password = ! empty( $input['password'] ) ? $input['password'] : wp_generate_password();
+
+			$user_id = wp_insert_user( array(
+				'user_login' => $username,
+				'user_email' => $email,
+				'user_pass'  => $password,
+				'first_name' => isset( $input['first_name'] ) ? sanitize_text_field( $input['first_name'] ) : '',
+				'last_name'  => isset( $input['last_name'] ) ? sanitize_text_field( $input['last_name'] ) : '',
+				'role'       => 'customer',
+			) );
+
+			if ( is_wp_error( $user_id ) ) {
+				return array( 'error' => $user_id->get_error_message() );
+			}
+
+			$customer = new \WC_Customer( $user_id );
+
+			if ( isset( $input['billing'] ) && is_array( $input['billing'] ) ) {
+				foreach ( $input['billing'] as $key => $value ) {
+					if ( is_string( $value ) ) {
+						$setter = "set_billing_{$key}";
+						if ( method_exists( $customer, $setter ) ) {
+							$customer->{$setter}( sanitize_text_field( $value ) );
+						}
+					}
+				}
+			}
+			if ( isset( $input['shipping'] ) && is_array( $input['shipping'] ) ) {
+				foreach ( $input['shipping'] as $key => $value ) {
+					if ( is_string( $value ) ) {
+						$setter = "set_shipping_{$key}";
+						if ( method_exists( $customer, $setter ) ) {
+							$customer->{$setter}( sanitize_text_field( $value ) );
+						}
+					}
+				}
+			}
+			$customer->save();
+
+			$user = get_userdata( $user_id );
+			return array( 'customer' => mcp_wc_format_customer( $user ) );
+		},
+		'permission_callback' => function (): bool {
+			return current_user_can( 'create_users' );
+		},
+		'meta'                => array(
+			'annotations' => array( 'readonly' => false, 'destructive' => false, 'idempotent' => false ),
+		),
+	) );
+}
+
+// ─── Customer Update ─────────────────────────────────────────────────────────
+
+function mcp_wc_register_customer_update(): void {
+	mcp_wc_register_ability( 'woocommerce/customer-update', array(
+		'label'               => 'Update customer',
+		'description'         => 'Update an existing customer\'s details, billing, and shipping information.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'id'          => array( 'type' => 'integer', 'minimum' => 1 ),
+				'email'       => array( 'type' => 'string', 'format' => 'email' ),
+				'first_name'  => array( 'type' => 'string' ),
+				'last_name'   => array( 'type' => 'string' ),
+				'password'    => array( 'type' => 'string' ),
+				'billing'     => array( 'type' => 'object', 'properties' => array(
+					'first_name' => array( 'type' => 'string' ), 'last_name' => array( 'type' => 'string' ),
+					'company'    => array( 'type' => 'string' ), 'address_1'  => array( 'type' => 'string' ),
+					'address_2'  => array( 'type' => 'string' ), 'city'       => array( 'type' => 'string' ),
+					'state'      => array( 'type' => 'string' ), 'postcode'   => array( 'type' => 'string' ),
+					'country'    => array( 'type' => 'string' ), 'phone'      => array( 'type' => 'string' ),
+					'email'      => array( 'type' => 'string', 'format' => 'email' ),
+				), 'additionalProperties' => false ),
+				'shipping'    => array( 'type' => 'object', 'properties' => array(
+					'first_name' => array( 'type' => 'string' ), 'last_name' => array( 'type' => 'string' ),
+					'company'    => array( 'type' => 'string' ), 'address_1'  => array( 'type' => 'string' ),
+					'address_2'  => array( 'type' => 'string' ), 'city'       => array( 'type' => 'string' ),
+					'state'      => array( 'type' => 'string' ), 'postcode'   => array( 'type' => 'string' ),
+					'country'    => array( 'type' => 'string' ),
+				), 'additionalProperties' => false ),
+			),
+			'required'             => array( 'id' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array(
+				'customer' => array( 'type' => 'object' ),
+			),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! current_user_can( 'edit_users' ) ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$user = get_userdata( (int) $input['id'] );
+			if ( ! $user ) {
+				return array( 'error' => 'User not found.' );
+			}
+
+			$data = array( 'ID' => $user->ID );
+			if ( isset( $input['email'] ) ) { $data['user_email'] = sanitize_email( $input['email'] ); }
+			if ( isset( $input['first_name'] ) ) { $data['first_name'] = sanitize_text_field( $input['first_name'] ); }
+			if ( isset( $input['last_name'] ) ) { $data['last_name'] = sanitize_text_field( $input['last_name'] ); }
+			if ( isset( $input['password'] ) ) { $data['user_pass'] = $input['password']; }
+
+			$result = wp_update_user( $data );
+			if ( is_wp_error( $result ) ) {
+				return array( 'error' => $result->get_error_message() );
+			}
+
+			$customer = new \WC_Customer( $user->ID );
+			if ( isset( $input['billing'] ) && is_array( $input['billing'] ) ) {
+				foreach ( $input['billing'] as $key => $value ) {
+					if ( is_string( $value ) ) {
+						$setter = "set_billing_{$key}";
+						if ( method_exists( $customer, $setter ) ) {
+							$customer->{$setter}( sanitize_text_field( $value ) );
+						}
+					}
+				}
+			}
+			if ( isset( $input['shipping'] ) && is_array( $input['shipping'] ) ) {
+				foreach ( $input['shipping'] as $key => $value ) {
+					if ( is_string( $value ) ) {
+						$setter = "set_shipping_{$key}";
+						if ( method_exists( $customer, $setter ) ) {
+							$customer->{$setter}( sanitize_text_field( $value ) );
+						}
+					}
+				}
+			}
+			$customer->save();
+
+			return array( 'customer' => mcp_wc_format_customer( get_userdata( $user->ID ) ) );
+		},
+		'permission_callback' => function (): bool {
+			return current_user_can( 'edit_users' );
+		},
+		'meta'                => array(
+			'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => false ),
 		),
 	) );
 }

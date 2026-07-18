@@ -20,6 +20,7 @@ function mcp_wc_register_setting_abilities(): void {
 	mcp_wc_register_shipping_methods_query();
 	mcp_wc_register_payment_gateways_query();
 	mcp_wc_register_webhooks_query();
+	mcp_wc_register_shipping_classes_query();
 }
 
 function mcp_wc_settings_permission(): bool {
@@ -502,4 +503,76 @@ function mcp_wc_format_webhook( \WC_Webhook $webhook ): array {
 		'secret'       => $webhook->get_secret(),
 		'date_created' => mcp_wc_date_to_iso( $webhook->get_date_created() ),
 	);
+}
+
+// ─── Shipping Classes ────────────────────────────────────────────────────────
+
+function mcp_wc_register_shipping_classes_query(): void {
+	mcp_wc_register_ability( 'woocommerce/shipping-classes-query', array(
+		'label'               => 'Query shipping classes',
+		'description'         => 'List WooCommerce shipping classes.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'id'       => array( 'type' => 'integer', 'minimum' => 1 ),
+				'page'     => array( 'type' => 'integer', 'default' => 1, 'minimum' => 1 ),
+				'per_page' => array( 'type' => 'integer', 'default' => 25, 'minimum' => 1, 'maximum' => 100 ),
+			),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => mcp_wc_paginated_schema( array(
+			'type'       => 'object',
+			'properties' => array(
+				'id'          => array( 'type' => 'integer' ),
+				'name'        => array( 'type' => 'string' ),
+				'slug'        => array( 'type' => 'string' ),
+				'description' => array( 'type' => 'string' ),
+				'count'       => array( 'type' => 'integer' ),
+			),
+			'additionalProperties' => false,
+		) ),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! mcp_wc_settings_permission() ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			if ( isset( $input['id'] ) ) {
+				$term = get_term( (int) $input['id'], 'product_shipping_class' );
+				if ( ! $term || is_wp_error( $term ) ) {
+					return array( 'items' => array(), 'total_pages' => 0, 'page' => 1, 'per_page' => (int) ( $input['per_page'] ?? 25 ) );
+				}
+				return array( 'items' => array( array( 'id' => $term->term_id, 'name' => $term->name, 'slug' => $term->slug, 'description' => $term->description, 'count' => (int) $term->count ) ), 'total_pages' => 1, 'page' => 1, 'per_page' => 1 );
+			}
+
+			$page     = (int) ( $input['page'] ?? 1 );
+			$per_page = min( 100, max( 1, (int) ( $input['per_page'] ?? 25 ) ) );
+			$terms    = get_terms( array(
+				'taxonomy'   => 'product_shipping_class',
+				'hide_empty' => false,
+				'number'     => $per_page,
+				'offset'     => ( $page - 1 ) * $per_page,
+			) );
+			if ( is_wp_error( $terms ) ) { return array( 'error' => $terms->get_error_message() ); }
+
+			$items = array();
+			foreach ( $terms as $term ) {
+				$items[] = array( 'id' => $term->term_id, 'name' => $term->name, 'slug' => $term->slug, 'description' => $term->description, 'count' => (int) $term->count );
+			}
+
+			$total = wp_count_terms( array( 'taxonomy' => 'product_shipping_class', 'hide_empty' => false ) );
+			if ( is_wp_error( $total ) ) { $total = 0; }
+
+			return array(
+				'items'       => $items,
+				'total_pages' => max( 1, (int) ceil( (int) $total / $per_page ) ),
+				'page'        => $page,
+				'per_page'    => $per_page,
+			);
+		},
+		'permission_callback' => 'mcp_wc_settings_permission',
+		'meta'                => array(
+			'annotations' => array( 'readonly' => true, 'destructive' => false, 'idempotent' => true ),
+		),
+	) );
 }

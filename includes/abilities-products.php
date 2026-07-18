@@ -74,6 +74,7 @@ function mcp_wc_register_product_abilities(): void {
 	mcp_wc_register_attribute_term_create();
 	mcp_wc_register_attribute_term_update();
 	mcp_wc_register_attribute_term_delete();
+	mcp_wc_register_product_meta_query();
 }
 
 // ─── Products Query ──────────────────────────────────────────────────────────
@@ -247,6 +248,8 @@ function mcp_wc_register_product_create(): void {
 				'external_url'       => array( 'type' => 'string', 'format' => 'uri' ),
 				'button_text'        => array( 'type' => 'string' ),
 				'grouped_products'   => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ),
+				'featured_image_id'  => array( 'type' => 'integer', 'description' => 'Media library attachment ID for the product featured image.' ),
+				'gallery_image_ids'  => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Media library attachment IDs for the product image gallery.' ),
 				'attributes'         => array( 'type' => 'array', 'items' => array(
 					'type'       => 'object',
 					'properties' => array(
@@ -402,6 +405,15 @@ function mcp_wc_register_product_create(): void {
 				wp_set_object_terms( $product_id, array_map( 'absint', $input['tag_ids'] ), 'product_tag' );
 			}
 
+			if ( isset( $input['featured_image_id'] ) ) {
+				$product->set_image_id( (int) $input['featured_image_id'] );
+				$product->save();
+			}
+			if ( isset( $input['gallery_image_ids'] ) && is_array( $input['gallery_image_ids'] ) ) {
+				$product->set_gallery_image_ids( array_map( 'absint', $input['gallery_image_ids'] ) );
+				$product->save();
+			}
+
 			$product = wc_get_product( $product_id );
 			return array( 'product' => mcp_wc_format_product( $product ) );
 		},
@@ -453,6 +465,8 @@ function mcp_wc_register_product_update(): void {
 				'external_url'       => array( 'type' => 'string', 'format' => 'uri' ),
 				'button_text'        => array( 'type' => 'string' ),
 				'grouped_products'   => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ),
+				'featured_image_id'  => array( 'type' => 'integer', 'description' => 'Media library attachment ID for the product featured image.' ),
+				'gallery_image_ids'  => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Media library attachment IDs for the product image gallery.' ),
 				'attributes'         => array( 'type' => 'array', 'items' => array(
 					'type'       => 'object',
 					'properties' => array(
@@ -579,6 +593,15 @@ function mcp_wc_register_product_update(): void {
 			}
 			if ( isset( $input['tag_ids'] ) && is_array( $input['tag_ids'] ) ) {
 				wp_set_object_terms( $product->get_id(), array_map( 'absint', $input['tag_ids'] ), 'product_tag' );
+			}
+
+			if ( isset( $input['featured_image_id'] ) ) {
+				$product->set_image_id( (int) $input['featured_image_id'] );
+				$product->save();
+			}
+			if ( isset( $input['gallery_image_ids'] ) && is_array( $input['gallery_image_ids'] ) ) {
+				$product->set_gallery_image_ids( array_map( 'absint', $input['gallery_image_ids'] ) );
+				$product->save();
 			}
 
 			return array( 'product' => mcp_wc_format_product( wc_get_product( $product->get_id() ) ) );
@@ -1702,5 +1725,54 @@ function mcp_wc_register_attribute_term_delete(): void {
 		},
 		'permission_callback' => function (): bool { return current_user_can( 'manage_product_terms' ); },
 		'meta'                => array( 'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => true ) ),
+	) );
+}
+
+// ─── Product Meta Query ──────────────────────────────────────────────────────
+
+function mcp_wc_register_product_meta_query(): void {
+	mcp_wc_register_ability( 'woocommerce-mcp/product-meta-query', array(
+		'label'       => 'Get product meta',
+		'description' => 'Read custom meta fields for a product. Essential for extension interoperability (Subscriptions, Bookings, Bundles, etc.).',
+		'category'    => 'site',
+		'input_schema' => array(
+			'type'       => 'object',
+			'properties' => array(
+				'product_id' => array( 'type' => 'integer', 'minimum' => 1 ),
+				'keys'       => array( 'type' => 'array', 'items' => array( 'type' => 'string' ), 'description' => 'Specific meta keys to retrieve. If empty, returns all product meta.' ),
+			),
+			'required'   => array( 'product_id' ),
+			'additionalProperties' => false,
+		),
+		'output_schema' => array(
+			'type'       => 'object',
+			'properties' => array(
+				'meta' => array( 'type' => 'object', 'additionalProperties' => true ),
+			),
+			'additionalProperties' => false,
+		),
+		'execute_callback' => function( array $input ): array {
+			if ( ! current_user_can( 'edit_products' ) ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+			$product = wc_get_product( (int) $input['product_id'] );
+			if ( ! $product ) {
+				return array( 'error' => 'Product not found.' );
+			}
+			$all_meta = get_post_meta( $product->get_id() );
+			$filtered = array();
+			$keys = $input['keys'] ?? array();
+			foreach ( $all_meta as $key => $values ) {
+				if ( ! empty( $keys ) && ! in_array( $key, $keys, true ) ) {
+					continue;
+				}
+				$filtered[ $key ] = count( $values ) === 1 ? $values[0] : $values;
+			}
+			return array( 'meta' => $filtered );
+		},
+		'permission_callback' => function(): bool {
+			return current_user_can( 'edit_products' );
+		},
+		'meta' => array( 'annotations' => array( 'readonly' => true, 'destructive' => false, 'idempotent' => true ) ),
 	) );
 }

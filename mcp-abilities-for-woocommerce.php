@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities for WooCommerce
  * Plugin URI: https://devenia.com/plugins/mcp-abilities-for-woocommerce/
  * Description: Comprehensive WooCommerce abilities for MCP. Products, orders, coupons, customers, reports, settings, reviews, shipping, tax, and webhooks.
- * Version: 1.0.11
+ * Version: 1.1.0
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -148,6 +148,8 @@ function mcp_wc_format_product( \WC_Product $product ): array {
 		'external_url'       => $product->get_type() === 'external' ? $product->get_product_url() : null,
 		'button_text'        => $product->get_type() === 'external' ? $product->get_button_text() : null,
 		'grouped_products'   => $product->get_type() === 'grouped' ? $product->get_children() : array(),
+		'featured_image_id'  => $product->get_image_id(),
+		'gallery_image_ids'  => $product->get_gallery_image_ids(),
 		'date_created'       => mcp_wc_date_to_iso( $product->get_date_created() ),
 		'date_created_gmt'   => mcp_wc_date_to_iso( $product->get_date_created(), true ),
 		'date_modified'      => mcp_wc_date_to_iso( $product->get_date_modified() ),
@@ -287,6 +289,8 @@ function mcp_wc_product_output_schema(): array {
 			'external_url'       => array( 'type' => array( 'string', 'null' ), 'format' => 'uri' ),
 			'button_text'        => array( 'type' => array( 'string', 'null' ) ),
 			'grouped_products'   => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ),
+			'featured_image_id'  => array( 'type' => array( 'integer', 'null' ) ),
+			'gallery_image_ids'  => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ),
 			'date_created'       => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),
 			'date_created_gmt'   => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),
 			'date_modified'      => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),

@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities for WooCommerce
  * Plugin URI: https://devenia.com/plugins/mcp-abilities-for-woocommerce/
  * Description: Comprehensive WooCommerce abilities for MCP. Products, orders, coupons, customers, reports, settings, reviews, shipping, tax, and webhooks.
- * Version: 1.0.9
+ * Version: 1.0.10
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -397,4 +397,4 @@ function mcp_register_woocommerce_abilities(): void {
 	mcp_wc_register_setting_abilities();
 	mcp_wc_register_review_abilities();
 }
-add_action( 'wp_abilities_api_init', 'mcp_register_woocommerce_abilities', -1 );
+add_action( 'wp_abilities_api_init', 'mcp_register_woocommerce_abilities', -99999 );

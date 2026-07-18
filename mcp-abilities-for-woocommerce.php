@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities for WooCommerce
  * Plugin URI: https://devenia.com/plugins/mcp-abilities-for-woocommerce/
  * Description: Comprehensive WooCommerce abilities for MCP. Products, orders, coupons, customers, reports, settings, reviews, shipping, tax, and webhooks.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -119,6 +119,27 @@ function mcp_wc_map_product_type_alias( string $alias ): string {
 }
 
 /**
+ * Format downloadable files for a product.
+ *
+ * @param \WC_Product $product
+ * @return array<int,array<string,string>>
+ */
+function mcp_wc_format_downloads( \WC_Product $product ): array {
+	if ( ! $product->is_downloadable() ) {
+		return array();
+	}
+	$downloads = array();
+	foreach ( $product->get_downloads() as $dl ) {
+		$downloads[] = array(
+			'id'   => $dl->get_id(),
+			'name' => $dl->get_name(),
+			'file' => $dl->get_file(),
+		);
+	}
+	return $downloads;
+}
+
+/**
  * Format a WC_Product for output.
  *
  * @param \WC_Product $product
@@ -150,6 +171,7 @@ function mcp_wc_format_product( \WC_Product $product ): array {
 		'grouped_products'   => $product->get_type() === 'grouped' ? $product->get_children() : array(),
 		'featured_image_id'  => $product->get_image_id(),
 		'gallery_image_ids'  => $product->get_gallery_image_ids(),
+		'downloads'          => mcp_wc_format_downloads( $product ),
 		'date_created'       => mcp_wc_date_to_iso( $product->get_date_created() ),
 		'date_created_gmt'   => mcp_wc_date_to_iso( $product->get_date_created(), true ),
 		'date_modified'      => mcp_wc_date_to_iso( $product->get_date_modified() ),
@@ -291,6 +313,15 @@ function mcp_wc_product_output_schema(): array {
 			'grouped_products'   => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ),
 			'featured_image_id'  => array( 'type' => array( 'integer', 'null' ) ),
 			'gallery_image_ids'  => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ),
+			'downloads'          => array( 'type' => 'array', 'items' => array(
+				'type'       => 'object',
+				'properties' => array(
+					'id'   => array( 'type' => 'string' ),
+					'name' => array( 'type' => 'string' ),
+					'file' => array( 'type' => 'string' ),
+				),
+				'additionalProperties' => false,
+			) ),
 			'date_created'       => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),
 			'date_created_gmt'   => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),
 			'date_modified'      => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),

@@ -74,6 +74,9 @@ function mcp_wc_register_product_abilities(): void {
 	mcp_wc_register_attribute_term_create();
 	mcp_wc_register_attribute_term_update();
 	mcp_wc_register_attribute_term_delete();
+	mcp_wc_register_attribute_create();
+	mcp_wc_register_attribute_update();
+	mcp_wc_register_attribute_delete();
 	mcp_wc_register_product_meta_query();
 }
 
@@ -254,6 +257,20 @@ function mcp_wc_register_product_create(): void {
 				'grouped_products'   => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ),
 				'featured_image_id'  => array( 'type' => 'integer', 'description' => 'Media library attachment ID for the product featured image.' ),
 				'gallery_image_ids'  => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Media library attachment IDs for the product image gallery.' ),
+				'downloads'          => array(
+					'type'  => 'array',
+					'items' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'name'        => array( 'type' => 'string' ),
+							'file'        => array( 'type' => 'string', 'description' => 'File URL or path.' ),
+							'download_id' => array( 'type' => 'string', 'description' => 'Leave blank for new files, or provide ID to update an existing downloadable.' ),
+						),
+						'required'             => array( 'name', 'file' ),
+						'additionalProperties' => false,
+					),
+					'description' => 'Downloadable files for the product. Providing this array REPLACES all existing downloadable files.',
+				),
 				'attributes'         => array( 'type' => 'array', 'items' => array(
 					'type'       => 'object',
 					'properties' => array(
@@ -418,6 +435,21 @@ function mcp_wc_register_product_create(): void {
 				$product->save();
 			}
 
+			if ( isset( $input['downloads'] ) && is_array( $input['downloads'] ) && $product->is_downloadable() ) {
+				$downloads = array();
+				foreach ( $input['downloads'] as $dl ) {
+					$download = new \WC_Product_Download();
+					if ( ! empty( $dl['download_id'] ) ) {
+						$download->set_id( sanitize_text_field( $dl['download_id'] ) );
+					}
+					$download->set_name( sanitize_text_field( $dl['name'] ) );
+					$download->set_file( esc_url_raw( $dl['file'] ) );
+					$downloads[] = $download;
+				}
+				$product->set_downloads( $downloads );
+				$product->save();
+			}
+
 			$product = wc_get_product( $product_id );
 			return array( 'product' => mcp_wc_format_product( $product ) );
 		},
@@ -471,6 +503,20 @@ function mcp_wc_register_product_update(): void {
 				'grouped_products'   => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ) ),
 				'featured_image_id'  => array( 'type' => 'integer', 'description' => 'Media library attachment ID for the product featured image.' ),
 				'gallery_image_ids'  => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Media library attachment IDs for the product image gallery.' ),
+				'downloads'          => array(
+					'type'  => 'array',
+					'items' => array(
+						'type'       => 'object',
+						'properties' => array(
+							'name'        => array( 'type' => 'string' ),
+							'file'        => array( 'type' => 'string', 'description' => 'File URL or path.' ),
+							'download_id' => array( 'type' => 'string', 'description' => 'Leave blank for new files, or provide ID to update an existing downloadable.' ),
+						),
+						'required'             => array( 'name', 'file' ),
+						'additionalProperties' => false,
+					),
+					'description' => 'Downloadable files for the product. Providing this array REPLACES all existing downloadable files.',
+				),
 				'attributes'         => array( 'type' => 'array', 'items' => array(
 					'type'       => 'object',
 					'properties' => array(
@@ -605,6 +651,21 @@ function mcp_wc_register_product_update(): void {
 			}
 			if ( isset( $input['gallery_image_ids'] ) && is_array( $input['gallery_image_ids'] ) ) {
 				$product->set_gallery_image_ids( array_map( 'absint', $input['gallery_image_ids'] ) );
+				$product->save();
+			}
+
+			if ( isset( $input['downloads'] ) && is_array( $input['downloads'] ) && $product->is_downloadable() ) {
+				$downloads = array();
+				foreach ( $input['downloads'] as $dl ) {
+					$download = new \WC_Product_Download();
+					if ( ! empty( $dl['download_id'] ) ) {
+						$download->set_id( sanitize_text_field( $dl['download_id'] ) );
+					}
+					$download->set_name( sanitize_text_field( $dl['name'] ) );
+					$download->set_file( esc_url_raw( $dl['file'] ) );
+					$downloads[] = $download;
+				}
+				$product->set_downloads( $downloads );
 				$product->save();
 			}
 
@@ -1729,6 +1790,172 @@ function mcp_wc_register_attribute_term_delete(): void {
 		},
 		'permission_callback' => function (): bool { return current_user_can( 'manage_product_terms' ); },
 		'meta'                => array( 'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => true ) ),
+	) );
+}
+
+// ─── Attribute CRUD ──────────────────────────────────────────────────────────
+
+function mcp_wc_register_attribute_create(): void {
+	mcp_wc_register_ability( 'woocommerce/attribute-create', array(
+		'label'               => 'Create attribute',
+		'description'         => 'Create a global product attribute taxonomy.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'name'         => array( 'type' => 'string' ),
+				'slug'         => array( 'type' => 'string', 'description' => 'Auto-generated from name if omitted.' ),
+				'type'         => array( 'type' => 'string', 'enum' => array( 'select', 'text' ), 'default' => 'select' ),
+				'order_by'     => array( 'type' => 'string', 'enum' => array( 'menu_order', 'name', 'name_num', 'id' ), 'default' => 'menu_order' ),
+				'has_archives' => array( 'type' => 'boolean', 'default' => false ),
+			),
+			'required'             => array( 'name' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array(
+				'attribute' => array( 'type' => 'object' ),
+			),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! current_user_can( 'manage_product_terms' ) ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$name = sanitize_text_field( $input['name'] );
+			$slug = ! empty( $input['slug'] ) ? sanitize_title( $input['slug'] ) : sanitize_title( $name );
+			if ( strlen( $slug ) > 28 ) { $slug = substr( $slug, 0, 28 ); }
+
+			$existing = wc_get_attribute_taxonomies();
+			foreach ( $existing as $attr ) {
+				if ( $attr->attribute_name === $slug ) {
+					return array( 'error' => 'An attribute with this slug already exists.' );
+				}
+			}
+
+			$attribute_id = wc_create_attribute( array(
+				'name'         => $name,
+				'slug'         => $slug,
+				'type'         => $input['type'] ?? 'select',
+				'order_by'     => $input['order_by'] ?? 'menu_order',
+				'has_archives' => $input['has_archives'] ?? false,
+			) );
+
+			if ( is_wp_error( $attribute_id ) ) {
+				return array( 'error' => $attribute_id->get_error_message() );
+			}
+
+			$taxonomy_name = wc_attribute_taxonomy_name( $slug );
+			if ( ! taxonomy_exists( $taxonomy_name ) ) {
+				register_taxonomy( $taxonomy_name, array( 'product' ), array() );
+			}
+
+			$attribute = wc_get_attribute( $attribute_id );
+			return array( 'attribute' => mcp_wc_format_attribute( $attribute ) );
+		},
+		'permission_callback' => function (): bool {
+			return current_user_can( 'manage_product_terms' );
+		},
+		'meta'                => array(
+			'annotations' => array( 'readonly' => false, 'destructive' => false, 'idempotent' => false ),
+		),
+	) );
+}
+
+function mcp_wc_register_attribute_update(): void {
+	mcp_wc_register_ability( 'woocommerce/attribute-update', array(
+		'label'               => 'Update attribute',
+		'description'         => 'Update a global product attribute taxonomy.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'id'           => array( 'type' => 'integer', 'minimum' => 1 ),
+				'name'         => array( 'type' => 'string' ),
+				'slug'         => array( 'type' => 'string' ),
+				'type'         => array( 'type' => 'string', 'enum' => array( 'select', 'text' ) ),
+				'order_by'     => array( 'type' => 'string', 'enum' => array( 'menu_order', 'name', 'name_num', 'id' ) ),
+				'has_archives' => array( 'type' => 'boolean' ),
+			),
+			'required'             => array( 'id' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array( 'attribute' => array( 'type' => 'object' ) ),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! current_user_can( 'manage_product_terms' ) ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$attr = wc_get_attribute( (int) $input['id'] );
+			if ( ! $attr ) {
+				return array( 'error' => 'Attribute not found.' );
+			}
+
+			$data = array( 'attribute_id' => $attr->id );
+			if ( isset( $input['name'] ) ) { $data['attribute_label'] = sanitize_text_field( $input['name'] ); }
+			if ( isset( $input['slug'] ) ) {
+				$slug = sanitize_title( $input['slug'] );
+				if ( strlen( $slug ) > 28 ) { $slug = substr( $slug, 0, 28 ); }
+				$data['attribute_name'] = $slug;
+			}
+			if ( isset( $input['type'] ) ) { $data['attribute_type'] = sanitize_text_field( $input['type'] ); }
+			if ( isset( $input['order_by'] ) ) { $data['attribute_orderby'] = sanitize_text_field( $input['order_by'] ); }
+			if ( isset( $input['has_archives'] ) ) { $data['attribute_public'] = (int) (bool) $input['has_archives']; }
+
+			$result = wc_update_attribute( (int) $input['id'], $data );
+			if ( is_wp_error( $result ) ) {
+				return array( 'error' => $result->get_error_message() );
+			}
+
+			return array( 'attribute' => mcp_wc_format_attribute( wc_get_attribute( (int) $input['id'] ) ) );
+		},
+		'permission_callback' => function (): bool {
+			return current_user_can( 'manage_product_terms' );
+		},
+		'meta'                => array(
+			'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => false ),
+		),
+	) );
+}
+
+function mcp_wc_register_attribute_delete(): void {
+	mcp_wc_register_ability( 'woocommerce/attribute-delete', array(
+		'label'               => 'Delete attribute',
+		'description'         => 'Delete a global product attribute taxonomy.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'id' => array( 'type' => 'integer', 'minimum' => 1 ),
+			),
+			'required'             => array( 'id' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array( 'deleted' => array( 'type' => 'boolean' ), 'id' => array( 'type' => 'integer' ) ),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! current_user_can( 'manage_product_terms' ) ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$result = wc_delete_attribute( (int) $input['id'] );
+			return array( 'deleted' => (bool) $result, 'id' => (int) $input['id'] );
+		},
+		'permission_callback' => function (): bool {
+			return current_user_can( 'manage_product_terms' );
+		},
+		'meta'                => array(
+			'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => true ),
+		),
 	) );
 }
 

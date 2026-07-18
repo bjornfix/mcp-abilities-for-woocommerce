@@ -21,6 +21,7 @@ function mcp_wc_register_order_abilities(): void {
 	mcp_wc_register_order_refunds_query();
 	mcp_wc_register_order_refund_create();
 	mcp_wc_register_order_notes_query();
+	mcp_wc_register_order_items_update();
 }
 
 function mcp_wc_get_order_or_error( int $id, string $action ): array {
@@ -259,7 +260,7 @@ function mcp_wc_register_order_create(): void {
 function mcp_wc_register_order_update_status(): void {
 	mcp_wc_register_ability( 'woocommerce-mcp/order-update-status', array(
 		'label'               => 'Update order status',
-		'description'         => 'Update an order status with optional note. Use status "note-only" to add a note without changing the status.',
+		'description'         => 'Update an order status with optional note, or update billing/shipping address. Use status \'note-only\' to add a note without changing the status.',
 		'category'            => 'site',
 		'input_schema'        => array(
 			'type'                 => 'object',
@@ -268,6 +269,21 @@ function mcp_wc_register_order_update_status(): void {
 				'status'        => array( 'type' => 'string', 'description' => 'New order status. Use "note-only" to add a note without changing the status.' ),
 				'note'          => array( 'type' => 'string', 'description' => 'Optional status change note.' ),
 				'customer_note' => array( 'type' => 'boolean', 'default' => false, 'description' => 'Make the note visible to the customer.' ),
+				'billing'       => array( 'type' => 'object', 'properties' => array(
+					'first_name' => array( 'type' => 'string' ), 'last_name' => array( 'type' => 'string' ),
+					'company'    => array( 'type' => 'string' ), 'address_1'  => array( 'type' => 'string' ),
+					'address_2'  => array( 'type' => 'string' ), 'city'       => array( 'type' => 'string' ),
+					'state'      => array( 'type' => 'string' ), 'postcode'   => array( 'type' => 'string' ),
+					'country'    => array( 'type' => 'string' ), 'email'      => array( 'type' => 'string', 'format' => 'email' ),
+					'phone'      => array( 'type' => 'string' ),
+				), 'additionalProperties' => false, 'description' => 'Update billing address fields.' ),
+				'shipping'      => array( 'type' => 'object', 'properties' => array(
+					'first_name' => array( 'type' => 'string' ), 'last_name' => array( 'type' => 'string' ),
+					'company'    => array( 'type' => 'string' ), 'address_1'  => array( 'type' => 'string' ),
+					'address_2'  => array( 'type' => 'string' ), 'city'       => array( 'type' => 'string' ),
+					'state'      => array( 'type' => 'string' ), 'postcode'   => array( 'type' => 'string' ),
+					'country'    => array( 'type' => 'string' ),
+				), 'additionalProperties' => false, 'description' => 'Update shipping address fields.' ),
 			),
 			'required'             => array( 'id' ),
 			'additionalProperties' => false,
@@ -302,6 +318,29 @@ function mcp_wc_register_order_update_status(): void {
 
 			$status = sanitize_text_field( $input['status'] );
 			$order->update_status( $status, '' !== $note ? $note : '' );
+
+			if ( isset( $input['billing'] ) && is_array( $input['billing'] ) ) {
+				foreach ( $input['billing'] as $key => $value ) {
+					if ( is_string( $value ) ) {
+						$method = "set_billing_{$key}";
+						if ( method_exists( $order, $method ) ) {
+							$order->$method( sanitize_text_field( $value ) );
+						}
+					}
+				}
+				$order->save();
+			}
+			if ( isset( $input['shipping'] ) && is_array( $input['shipping'] ) ) {
+				foreach ( $input['shipping'] as $key => $value ) {
+					if ( is_string( $value ) ) {
+						$method = "set_shipping_{$key}";
+						if ( method_exists( $order, $method ) ) {
+							$order->$method( sanitize_text_field( $value ) );
+						}
+					}
+				}
+				$order->save();
+			}
 
 			return array( 'order' => mcp_wc_format_order( $order, true ) );
 		},
@@ -619,6 +658,78 @@ function mcp_wc_register_order_notes_query(): void {
 		},
 		'meta'                => array(
 			'annotations' => array( 'readonly' => true, 'destructive' => false, 'idempotent' => true ),
+		),
+	) );
+}
+
+// ─── Order Items Update ──────────────────────────────────────────────────────
+
+function mcp_wc_register_order_items_update(): void {
+	mcp_wc_register_ability( 'woocommerce/order-items-update', array(
+		'label'               => 'Update order items',
+		'description'         => 'Add or remove line items from an existing order. Recalculates totals after changes.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'order_id'    => array( 'type' => 'integer', 'minimum' => 1 ),
+				'add_items'   => array( 'type' => 'array', 'items' => array(
+					'type'       => 'object',
+					'properties' => array(
+						'product_id'   => array( 'type' => 'integer', 'minimum' => 1 ),
+						'variation_id' => array( 'type' => 'integer' ),
+						'quantity'     => array( 'type' => 'integer', 'minimum' => 1, 'default' => 1 ),
+					),
+					'required'   => array( 'product_id' ),
+					'additionalProperties' => false,
+				) ),
+				'remove_items' => array( 'type' => 'array', 'items' => array( 'type' => 'integer' ), 'description' => 'Line item IDs to remove.' ),
+			),
+			'required'             => array( 'order_id' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array(
+				'order' => mcp_wc_order_output_schema(),
+			),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			$result = mcp_wc_get_order_or_error( (int) $input['order_id'], 'update items of' );
+			if ( ! $result['success'] ) { return $result; }
+
+			$order = $result['order'];
+
+			if ( isset( $input['remove_items'] ) && is_array( $input['remove_items'] ) ) {
+				foreach ( $input['remove_items'] as $item_id ) {
+					$order->remove_item( (int) $item_id );
+				}
+			}
+
+			if ( isset( $input['add_items'] ) && is_array( $input['add_items'] ) ) {
+				foreach ( $input['add_items'] as $item ) {
+					$product_id   = (int) $item['product_id'];
+					$variation_id = isset( $item['variation_id'] ) ? (int) $item['variation_id'] : 0;
+					$quantity     = isset( $item['quantity'] ) ? max( 1, (int) $item['quantity'] ) : 1;
+
+					$product = $variation_id ? wc_get_product( $variation_id ) : wc_get_product( $product_id );
+					if ( ! $product ) { continue; }
+
+					$order->add_product( $product, $quantity );
+				}
+			}
+
+			$order->calculate_totals();
+			$order->save();
+
+			return array( 'order' => mcp_wc_format_order( $order, true ) );
+		},
+		'permission_callback' => function (): bool {
+			return current_user_can( 'edit_shop_orders' );
+		},
+		'meta'                => array(
+			'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => false ),
 		),
 	) );
 }

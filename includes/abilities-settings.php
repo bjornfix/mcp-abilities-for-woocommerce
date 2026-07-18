@@ -21,6 +21,9 @@ function mcp_wc_register_setting_abilities(): void {
 	mcp_wc_register_payment_gateways_query();
 	mcp_wc_register_webhooks_query();
 	mcp_wc_register_shipping_classes_query();
+	mcp_wc_register_webhook_create();
+	mcp_wc_register_webhook_update();
+	mcp_wc_register_webhook_delete();
 }
 
 function mcp_wc_settings_permission(): bool {
@@ -503,6 +506,147 @@ function mcp_wc_format_webhook( \WC_Webhook $webhook ): array {
 		'secret'       => $webhook->get_secret(),
 		'date_created' => mcp_wc_date_to_iso( $webhook->get_date_created() ),
 	);
+}
+
+// ─── Webhook Mutations ──────────────────────────────────────────────────────
+
+function mcp_wc_register_webhook_create(): void {
+	mcp_wc_register_ability( 'woocommerce/webhook-create', array(
+		'label'               => 'Create webhook',
+		'description'         => 'Create a new WooCommerce webhook.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'name'         => array( 'type' => 'string' ),
+				'topic'        => array( 'type' => 'string', 'description' => 'Webhook topic, e.g. order.created, product.updated, coupon.created.' ),
+				'delivery_url' => array( 'type' => 'string', 'format' => 'uri' ),
+				'secret'       => array( 'type' => 'string', 'description' => 'Webhook secret for HMAC verification.' ),
+				'status'       => array( 'type' => 'string', 'enum' => array( 'active', 'paused', 'disabled' ), 'default' => 'active' ),
+			),
+			'required'             => array( 'name', 'topic', 'delivery_url' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array( 'webhook' => array( 'type' => 'object' ) ),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! mcp_wc_settings_permission() ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$webhook = new \WC_Webhook();
+			$webhook->set_name( sanitize_text_field( $input['name'] ) );
+			$webhook->set_topic( sanitize_text_field( $input['topic'] ) );
+			$webhook->set_delivery_url( esc_url_raw( $input['delivery_url'] ) );
+			if ( isset( $input['secret'] ) ) {
+				$webhook->set_secret( sanitize_text_field( $input['secret'] ) );
+			}
+			$webhook->set_status( $input['status'] ?? 'active' );
+
+			$webhook_id = $webhook->save();
+			if ( ! $webhook_id ) {
+				return array( 'error' => 'Failed to create webhook.' );
+			}
+
+			return array( 'webhook' => mcp_wc_format_webhook( wc_get_webhook( $webhook_id ) ) );
+		},
+		'permission_callback' => 'mcp_wc_settings_permission',
+		'meta'                => array(
+			'annotations' => array( 'readonly' => false, 'destructive' => false, 'idempotent' => false ),
+		),
+	) );
+}
+
+function mcp_wc_register_webhook_update(): void {
+	mcp_wc_register_ability( 'woocommerce/webhook-update', array(
+		'label'               => 'Update webhook',
+		'description'         => 'Update an existing WooCommerce webhook.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'id'           => array( 'type' => 'integer', 'minimum' => 1 ),
+				'name'         => array( 'type' => 'string' ),
+				'topic'        => array( 'type' => 'string' ),
+				'delivery_url' => array( 'type' => 'string', 'format' => 'uri' ),
+				'secret'       => array( 'type' => 'string' ),
+				'status'       => array( 'type' => 'string', 'enum' => array( 'active', 'paused', 'disabled' ) ),
+			),
+			'required'             => array( 'id' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array( 'webhook' => array( 'type' => 'object' ) ),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! mcp_wc_settings_permission() ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$webhook = wc_get_webhook( (int) $input['id'] );
+			if ( ! $webhook ) {
+				return array( 'error' => 'Webhook not found.' );
+			}
+
+			if ( isset( $input['name'] ) ) { $webhook->set_name( sanitize_text_field( $input['name'] ) ); }
+			if ( isset( $input['topic'] ) ) { $webhook->set_topic( sanitize_text_field( $input['topic'] ) ); }
+			if ( isset( $input['delivery_url'] ) ) { $webhook->set_delivery_url( esc_url_raw( $input['delivery_url'] ) ); }
+			if ( isset( $input['secret'] ) ) { $webhook->set_secret( sanitize_text_field( $input['secret'] ) ); }
+			if ( isset( $input['status'] ) ) { $webhook->set_status( sanitize_text_field( $input['status'] ) ); }
+
+			$webhook->save();
+
+			return array( 'webhook' => mcp_wc_format_webhook( wc_get_webhook( $webhook->get_id() ) ) );
+		},
+		'permission_callback' => 'mcp_wc_settings_permission',
+		'meta'                => array(
+			'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => false ),
+		),
+	) );
+}
+
+function mcp_wc_register_webhook_delete(): void {
+	mcp_wc_register_ability( 'woocommerce/webhook-delete', array(
+		'label'               => 'Delete webhook',
+		'description'         => 'Delete a WooCommerce webhook.',
+		'category'            => 'site',
+		'input_schema'        => array(
+			'type'                 => 'object',
+			'properties'           => array(
+				'id'    => array( 'type' => 'integer', 'minimum' => 1 ),
+				'force' => array( 'type' => 'boolean', 'default' => true ),
+			),
+			'required'             => array( 'id' ),
+			'additionalProperties' => false,
+		),
+		'output_schema'       => array(
+			'type'       => 'object',
+			'properties' => array( 'deleted' => array( 'type' => 'boolean' ), 'id' => array( 'type' => 'integer' ) ),
+			'additionalProperties' => false,
+		),
+		'execute_callback'    => function ( array $input ): array {
+			if ( ! mcp_wc_settings_permission() ) {
+				return array( 'error' => 'Permission denied.' );
+			}
+
+			$webhook = wc_get_webhook( (int) $input['id'] );
+			if ( ! $webhook ) {
+				return array( 'error' => 'Webhook not found.' );
+			}
+
+			$success = $webhook->delete( (bool) ( $input['force'] ?? true ) );
+			return array( 'deleted' => (bool) $success, 'id' => (int) $input['id'] );
+		},
+		'permission_callback' => 'mcp_wc_settings_permission',
+		'meta'                => array(
+			'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => true ),
+		),
+	) );
 }
 
 // ─── Shipping Classes ────────────────────────────────────────────────────────

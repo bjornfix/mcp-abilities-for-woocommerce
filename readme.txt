@@ -36,6 +36,8 @@ Historical `woocommerce/*` names remain deprecated compatibility aliases only wh
 2. Upload and activate this plugin.
 3. Connect an Abilities API-compatible MCP adapter and discover `woocommerce-mcp/*` abilities.
 
+Download the stable plugin ZIP from https://downloads.devenia.com/mcp-abilities-for-woocommerce.zip.
+
 == Frequently Asked Questions ==
 
 = Does this support HPOS? =

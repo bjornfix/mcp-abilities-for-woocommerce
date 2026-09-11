@@ -9,6 +9,11 @@ final class WP_Error {
 	public function __construct( public string $code = '', public string $message = '', public array $data = array() ) {}
 	public function get_error_message(): string { return $this->message; }
 }
+class WP_REST_Response {
+	private $data;
+	public function __construct( $data ) { $this->data = $data; }
+	public function get_data() { return $this->data; }
+}
 class WP_User { public array $roles = array(); }
 
 $abilities = array(); $existing = array(); $caps = array();
@@ -24,6 +29,7 @@ function wp_has_ability( $name ) { global $abilities, $existing; return isset( $
 function wp_register_ability( $name, $args ) { global $abilities; $abilities[ $name ] = $args; }
 
 require dirname( __DIR__ ) . '/includes/class-ability-execution-module.php';
+require dirname( __DIR__ ) . '/includes/abilities-settings.php';
 
 $failures = array();
 function expect_true( bool $condition, string $message ): void { global $failures; if ( ! $condition ) { $failures[] = $message; } }
@@ -69,6 +75,19 @@ $products = source( 'includes/abilities-products.php' ); $settings = source( 'in
 $reports = source( 'includes/abilities-reports.php' ); $customers = source( 'includes/abilities-customers.php' );
 $administration = source( 'includes/class-commerce-administration-module.php' ); $administration_abilities = source( 'includes/abilities-administration.php' );
 $main = source( 'mcp-abilities-for-woocommerce.php' );
+$array_result = array( 'status' => 'ok' );
+$object_result = new WP_REST_Response( array( 'status' => 'ok' ) );
+expect_true( $array_result === mcp_wc_unwrap_rest_result( $array_result ), 'System-status normalization must preserve array controller results.' );
+expect_true( array( 'status' => 'ok' ) === mcp_wc_unwrap_rest_result( $object_result ), 'System-status normalization must unwrap response-object controller results.' );
+$system_status_start  = strpos( $settings, 'function mcp_wc_register_system_status' );
+$system_tools_start   = strpos( $settings, 'function mcp_wc_register_system_tools_query' );
+$system_status_source = false !== $system_status_start && false !== $system_tools_start
+	? substr( $settings, $system_status_start, $system_tools_start - $system_status_start )
+	: '';
+foreach ( array( 'get_environment_info', 'get_database_info', 'get_active_plugins', 'get_theme_info', 'get_settings', 'get_security_info', 'get_pages' ) as $method ) {
+	expect_true( str_contains( $system_status_source, "mcp_wc_unwrap_rest_result( \$controller->{$method}() )" ), 'System-status must normalize ' . $method . ' results.' );
+}
+expect_true( false === str_contains( $system_status_source, '->get_data()' ), 'System-status must not assume controller results are response objects.' );
 expect_true( str_contains( $lifecycle, "'order_id'      => \$order_id" ), 'Refund creation must pass order_id to wc_create_refund.' );
 expect_true( str_contains( $products, "get_term( \$id, \$taxonomy )" ), 'Attribute term mutations must bind the term to the requested taxonomy.' );
 expect_true( false === str_contains( $products, 'getFile()' ) && false === str_contains( $products, 'getLine()' ), 'Product failures must not expose filenames or line numbers.' );
@@ -85,7 +104,7 @@ expect_true( str_contains( $settings, 'WC_REST_Taxes_Controller' ) && false === 
 expect_true( str_contains( $administration, 'sanitize_country_codes' ) && str_contains( $administration_abilities, 'shipping_country_codes' ), 'Store-country modes must persist explicit validated country lists.' );
 expect_true( str_contains( $products, "confirmation_schema( 'woocommerce-mcp/product-update' )" ) && str_contains( $products, 'set_category_ids' ), 'Catalog mutations must use confirmed WooCommerce CRUD writes.' );
 expect_true( false === str_contains( $main, "add_filter( 'woocommerce_currency_symbol'" ), 'The generic MCP plugin must not override storefront currency presentation.' );
-expect_true( str_contains( $main, 'Version: 0.2.11' ) && str_contains( source( 'readme.txt' ), 'Stable tag: 0.2.11' ), 'Runtime and package versions must stay aligned.' );
+expect_true( str_contains( $main, 'Version: 0.2.12' ) && str_contains( source( 'readme.txt' ), 'Stable tag: 0.2.12' ), 'Runtime and package versions must stay aligned.' );
 expect_true( str_contains( $main, 'Requires Plugins: woocommerce' ) && false === str_contains( $main, 'woocommerce, abilities-api' ), 'WordPress 6.9 core Abilities support must not be declared as a separate plugin dependency.' );
 
 $readme = source( 'README.md' );
@@ -104,7 +123,7 @@ if ( false !== $inventory_start && false !== $inventory_end && $inventory_end > 
 		expect_true( str_contains( $registration_source, "'woocommerce-mcp/{$short_name}'" ) || str_contains( $registration_source, "'woocommerce/{$short_name}'" ) || str_contains( $administration_abilities, "'{$short_name}'" ), 'Documented ability must have a source registration: ' . $ability_name );
 	}
 }
-expect_true( str_contains( $readme, '**Stable version:** 0.2.11' ) && str_contains( $readme, '**Tested with WordPress:** 7.0' ), 'README release metadata must stay aligned.' );
+expect_true( str_contains( $readme, '**Stable version:** 0.2.12' ) && str_contains( $readme, '**Tested with WordPress:** 7.1' ), 'README release metadata must stay aligned.' );
 expect_true( str_contains( $readme, '**Tags:** woocommerce, mcp, abilities, ai, automation' ), 'README tags must stay aligned with readme.txt.' );
 
 if ( $failures ) { fwrite( STDERR, "Contract failures:\n- " . implode( "\n- ", $failures ) . "\n" ); exit( 1 ); }

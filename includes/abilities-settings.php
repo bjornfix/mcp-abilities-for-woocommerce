@@ -48,6 +48,23 @@ function mcp_wc_redact_system_paths( $value ) {
 	return $value;
 }
 
+/**
+ * Normalize WooCommerce controller results across supported return types.
+ *
+ * WooCommerce 11.1.0 returns arrays from the system-status helper methods,
+ * while earlier versions may return WP_REST_Response objects.
+ *
+ * @param mixed $value Controller result.
+ * @return mixed Unwrapped response data or the original value.
+ */
+function mcp_wc_unwrap_rest_result( $value ) {
+	if ( is_object( $value ) && method_exists( $value, 'get_data' ) ) {
+		return $value->get_data();
+	}
+
+	return $value;
+}
+
 function mcp_wc_allowed_system_tools(): array {
 	$tools = apply_filters( 'mcp_wc_allowed_system_tools', array() );
 	return is_array( $tools ) ? array_values( array_filter( array_map( 'sanitize_key', $tools ) ) ) : array();
@@ -884,32 +901,25 @@ function mcp_wc_register_system_status(): void {
 			$response   = array();
 
 			if ( empty( $input['section'] ) || 'environment' === $input['section'] ) {
-				$env = $controller->get_environment_info();
-				$response['environment'] = $env->get_data();
+				$response['environment'] = mcp_wc_unwrap_rest_result( $controller->get_environment_info() );
 			}
 			if ( empty( $input['section'] ) || 'database' === $input['section'] ) {
-				$db = $controller->get_database_info();
-				$response['database'] = $db->get_data();
+				$response['database'] = mcp_wc_unwrap_rest_result( $controller->get_database_info() );
 			}
 			if ( empty( $input['section'] ) || 'active_plugins' === $input['section'] ) {
-				$ap = $controller->get_active_plugins();
-				$response['active_plugins'] = $ap->get_data();
+				$response['active_plugins'] = mcp_wc_unwrap_rest_result( $controller->get_active_plugins() );
 			}
 			if ( empty( $input['section'] ) || 'theme' === $input['section'] ) {
-				$th = $controller->get_theme_info();
-				$response['theme'] = $th->get_data();
+				$response['theme'] = mcp_wc_unwrap_rest_result( $controller->get_theme_info() );
 			}
 			if ( empty( $input['section'] ) || 'settings' === $input['section'] ) {
-				$st = $controller->get_settings();
-				$response['settings'] = $st->get_data();
+				$response['settings'] = mcp_wc_unwrap_rest_result( $controller->get_settings() );
 			}
 			if ( empty( $input['section'] ) || 'security' === $input['section'] ) {
-				$se = $controller->get_security_info();
-				$response['security'] = $se->get_data();
+				$response['security'] = mcp_wc_unwrap_rest_result( $controller->get_security_info() );
 			}
 			if ( empty( $input['section'] ) || 'pages' === $input['section'] ) {
-				$pg = $controller->get_pages();
-				$response['pages'] = $pg->get_data();
+				$response['pages'] = mcp_wc_unwrap_rest_result( $controller->get_pages() );
 			}
 
 			return mcp_wc_redact_system_paths( $response );

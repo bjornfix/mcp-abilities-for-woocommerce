@@ -49,6 +49,67 @@ function mcp_wc_validate_price( ?string $price ): ?string {
 	return preg_match( '/^(?:(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)|)$/', $price ) ? $price : null;
 }
 
+/**
+ * Determine low stock using WooCommerce's effective product threshold.
+ *
+ * WC_Product_Query exposes a low_stock_amount query variable, but the core
+ * product data store does not apply it as a per-product low-stock filter. The
+ * query callback therefore uses the native manage_stock query and evaluates
+ * each returned product with WooCommerce's own threshold helper.
+ */
+function mcp_wc_product_is_low_stock( \WC_Product $product ): bool {
+	if ( ! $product->managing_stock() ) {
+		return false;
+	}
+
+	$quantity = $product->get_stock_quantity();
+	$threshold = wc_get_low_stock_amount( $product );
+	return null !== $quantity && '' !== $quantity && is_numeric( $threshold ) && (float) $quantity <= (float) $threshold;
+}
+
+/**
+ * Query low-stock products through bounded native WooCommerce batches.
+ *
+ * @param array<string,mixed> $args Base WC product query arguments.
+ * @return array<string,mixed>|WP_Error
+ */
+function mcp_wc_query_low_stock_products( array $args ) {
+	$scan_limit     = 5000;
+	$batch_size     = 100;
+	$candidate_page = 1;
+	$scanned        = 0;
+	$matches        = array();
+
+	do {
+		$remaining = $scan_limit - $scanned;
+		$batch     = min( $batch_size, $remaining );
+		$query_args = $args;
+		$query_args['manage_stock'] = true;
+		$query_args['page']         = $candidate_page;
+		$query_args['limit']        = $batch;
+		$query_args['paginate']     = true;
+
+		$result = wc_get_products( $query_args );
+		foreach ( $result->products as $product ) {
+			if ( mcp_wc_product_is_low_stock( $product ) ) {
+				$matches[] = $product;
+			}
+		}
+
+		$scanned += count( $result->products );
+		$max_pages = (int) $result->max_num_pages;
+		if ( $candidate_page >= $max_pages || 0 === $max_pages ) {
+			break;
+		}
+		if ( $scanned >= $scan_limit ) {
+			return mcp_wc_error( 'mcp_wc_low_stock_scan_limit', 'The low-stock query matched more than the safe scan limit. Narrow the query and retry.' );
+		}
+		++$candidate_page;
+	} while ( $scanned < $scan_limit );
+
+	return array( 'products' => $matches );
+}
+
 // ─── Products ────────────────────────────────────────────────────────────────
 
 function mcp_wc_register_product_abilities(): void {
@@ -104,9 +165,9 @@ function mcp_wc_register_products_query(): void {
 				'stock_status'      => array( 'type' => 'string', 'enum' => array( 'instock', 'outofstock', 'onbackorder' ) ),
 				'category_id'       => array( 'type' => 'integer', 'description' => 'Filter by product category ID.' ),
 				'tag_id'            => array( 'type' => 'integer', 'description' => 'Filter by product tag ID.' ),
-			'low_stock'         => array( 'type' => 'boolean', 'description' => 'Only return products with low stock (manage_stock=true and quantity below threshold).' ),
-			'date_after'        => array( 'type' => 'string', 'format' => 'date-time', 'description' => 'Filter products created after this date.' ),
-			'page'              => array( 'type' => 'integer', 'default' => 1, 'minimum' => 1 ),
+				'low_stock'         => array( 'type' => 'boolean', 'description' => 'Only return products with low stock (manage_stock=true and quantity at or below the effective threshold).' ),
+				'date_after'        => array( 'type' => 'string', 'format' => 'date-time', 'description' => 'Filter products created after this date.' ),
+				'page'              => array( 'type' => 'integer', 'default' => 1, 'minimum' => 1 ),
 				'per_page'          => array( 'type' => 'integer', 'default' => 10, 'minimum' => 1, 'maximum' => 100 ),
 			),
 			'additionalProperties' => false,
@@ -168,9 +229,7 @@ function mcp_wc_register_products_query(): void {
 					if ( ! $term || is_wp_error( $term ) ) { return array( 'products' => array(), 'total_pages' => 0, 'page' => $page, 'per_page' => $per_page ); }
 					$args['tag'] = array( $term->slug );
 			}
-			if ( ! empty( $input['low_stock'] ) ) {
-				$args['low_in_stock'] = true;
-			}
+			$low_stock = ! empty( $input['low_stock'] );
 			if ( ! empty( $input['date_after'] ) ) {
 					$args['date_created'] = '>' . sanitize_text_field( $input['date_after'] );
 			}
@@ -193,6 +252,24 @@ function mcp_wc_register_products_query(): void {
 						}
 					}
 				}
+
+			if ( $low_stock ) {
+				$low_stock_results = mcp_wc_query_low_stock_products( $args );
+				if ( is_wp_error( $low_stock_results ) ) {
+					return $low_stock_results;
+				}
+
+				$matched_products = $low_stock_results['products'];
+				$total_matches    = count( $matched_products );
+				$products         = array_slice( $matched_products, ( $page - 1 ) * $per_page, $per_page );
+
+				return array(
+					'products'    => array_map( 'mcp_wc_format_product', $products ),
+					'total_pages' => (int) ceil( $total_matches / $per_page ),
+					'page'        => $page,
+					'per_page'    => $per_page,
+				);
+			}
 
 			$results = wc_get_products( $args );
 
@@ -1532,12 +1609,11 @@ function mcp_wc_register_tag_update(): void {
 			'type'                 => 'object',
 			'properties'           => array(
 				'id'          => array( 'type' => 'integer', 'minimum' => 1 ),
-				'attribute_id' => array( 'type' => 'integer', 'minimum' => 1 ),
 				'name'        => array( 'type' => 'string' ),
 				'slug'        => array( 'type' => 'string' ),
 				'description' => array( 'type' => 'string' ),
 			),
-			'required'             => array( 'id', 'attribute_id' ),
+			'required'             => array( 'id' ),
 			'additionalProperties' => false,
 		),
 		'output_schema'       => array(
@@ -1668,13 +1744,19 @@ function mcp_wc_register_attributes_query(): void {
 				if ( ! $attribute ) {
 					return array( 'attributes' => array() );
 				}
-				return array( 'attributes' => array( mcp_wc_format_attribute( $attribute ) ) );
+				$formatted = mcp_wc_format_attribute( $attribute );
+				return array( 'attributes' => $formatted ? array( $formatted ) : array() );
 			}
 
-			$attributes = wc_get_attribute_taxonomies();
-			return array(
-				'attributes' => array_map( 'mcp_wc_format_attribute', $attributes ),
-			);
+			$attributes          = (array) wc_get_attribute_taxonomies();
+			$formatted_attributes = array();
+			foreach ( $attributes as $attribute ) {
+				$formatted = mcp_wc_format_attribute( $attribute );
+				if ( $formatted ) {
+					$formatted_attributes[] = $formatted;
+				}
+			}
+			return array( 'attributes' => $formatted_attributes );
 		},
 		'permission_callback' => function (): bool {
 			return current_user_can( 'manage_product_terms' );
@@ -1686,17 +1768,37 @@ function mcp_wc_register_attributes_query(): void {
 }
 
 function mcp_wc_format_attribute( $attribute ): array {
-	if ( is_object( $attribute ) && ! empty( $attribute->attribute_id ) ) {
-		return array(
-			'id'           => (int) $attribute->attribute_id,
-			'name'         => $attribute->attribute_label,
-			'slug'         => $attribute->attribute_name,
-			'type'         => $attribute->attribute_type ?? 'select',
-			'order_by'     => $attribute->attribute_orderby ?? 'menu_order',
-			'has_archives' => (bool) ( $attribute->attribute_public ?? false ),
-		);
+	if ( ! is_object( $attribute ) ) {
+		return array();
 	}
-	return array();
+
+	$id = isset( $attribute->attribute_id ) ? (int) $attribute->attribute_id : (int) ( $attribute->id ?? 0 );
+	$name = isset( $attribute->attribute_label ) ? (string) $attribute->attribute_label : (string) ( $attribute->name ?? '' );
+	$slug = isset( $attribute->attribute_name ) ? (string) $attribute->attribute_name : (string) ( $attribute->slug ?? '' );
+	if ( $id <= 0 || '' === $name || '' === $slug ) {
+		return array();
+	}
+
+	return array(
+		'id'           => $id,
+		'name'         => $name,
+		'slug'         => preg_replace( '/^pa_/', '', sanitize_title( $slug ) ),
+		'type'         => isset( $attribute->attribute_type ) ? (string) $attribute->attribute_type : (string) ( $attribute->type ?? 'select' ),
+		'order_by'     => isset( $attribute->attribute_orderby ) ? (string) $attribute->attribute_orderby : (string) ( $attribute->order_by ?? 'menu_order' ),
+		'has_archives' => isset( $attribute->attribute_public ) ? (bool) $attribute->attribute_public : (bool) ( $attribute->has_archives ?? false ),
+	);
+}
+
+/**
+ * Resolve a global attribute object to its native taxonomy exactly once.
+ *
+ * wc_get_attribute() returns a normalized slug that may already contain the
+ * pa_ prefix, while wc_get_attribute_taxonomies() returns the raw slug.
+ */
+function mcp_wc_attribute_taxonomy_name( object $attribute ): string {
+	$slug = isset( $attribute->attribute_name ) ? (string) $attribute->attribute_name : (string) ( $attribute->slug ?? '' );
+	$slug = preg_replace( '/^pa_/', '', sanitize_title( $slug ) );
+	return '' === $slug ? '' : wc_attribute_taxonomy_name( $slug );
 }
 
 function mcp_wc_register_attribute_terms_query(): void {
@@ -1736,7 +1838,8 @@ function mcp_wc_register_attribute_terms_query(): void {
 				return array( 'error' => 'Attribute not found.' );
 			}
 
-			$taxonomy  = wc_attribute_taxonomy_name( $attribute->slug );
+			$taxonomy  = mcp_wc_attribute_taxonomy_name( $attribute );
+			if ( '' === $taxonomy ) { return mcp_wc_error( 'mcp_wc_attribute_taxonomy_missing', 'The attribute taxonomy could not be resolved.' ); }
 			$page      = (int) ( $input['page'] ?? 1 );
 			$per_page  = min( 100, max( 1, (int) ( $input['per_page'] ?? 25 ) ) );
 			$args = array(
@@ -1816,7 +1919,8 @@ function mcp_wc_register_attribute_term_create(): void {
 			$attribute = wc_get_attribute( (int) $input['attribute_id'] );
 			if ( ! $attribute ) { return array( 'error' => 'Attribute not found.' ); }
 
-			$taxonomy = wc_attribute_taxonomy_name( $attribute->slug );
+			$taxonomy = mcp_wc_attribute_taxonomy_name( $attribute );
+			if ( '' === $taxonomy ) { return mcp_wc_error( 'mcp_wc_attribute_taxonomy_missing', 'The attribute taxonomy could not be resolved.' ); }
 			$args = array(
 				'name'        => sanitize_text_field( $input['name'] ),
 				'slug'        => isset( $input['slug'] ) ? sanitize_title( $input['slug'] ) : '',
@@ -1867,7 +1971,8 @@ function mcp_wc_register_attribute_term_update(): void {
 
 			$attribute = wc_get_attribute( (int) $input['attribute_id'] );
 			if ( ! $attribute ) { return mcp_wc_error( 'mcp_wc_attribute_not_found', 'Attribute not found.' ); }
-			$taxonomy = wc_attribute_taxonomy_name( $attribute->slug );
+			$taxonomy = mcp_wc_attribute_taxonomy_name( $attribute );
+			if ( '' === $taxonomy ) { return mcp_wc_error( 'mcp_wc_attribute_taxonomy_missing', 'The attribute taxonomy could not be resolved.' ); }
 			if ( ! MCP_WC_Ability_Execution_Module::can_manage_taxonomy( $taxonomy ) ) {
 				return mcp_wc_error( 'mcp_wc_forbidden_term', 'You do not have permission to manage this attribute taxonomy.' );
 			}
@@ -1923,7 +2028,8 @@ function mcp_wc_register_attribute_term_delete(): void {
 			if ( $confirmation ) { return $confirmation; }
 			$attribute = wc_get_attribute( (int) $input['attribute_id'] );
 			if ( ! $attribute ) { return mcp_wc_error( 'mcp_wc_attribute_not_found', 'Attribute not found.' ); }
-			$taxonomy = wc_attribute_taxonomy_name( $attribute->slug );
+			$taxonomy = mcp_wc_attribute_taxonomy_name( $attribute );
+			if ( '' === $taxonomy ) { return mcp_wc_error( 'mcp_wc_attribute_taxonomy_missing', 'The attribute taxonomy could not be resolved.' ); }
 			if ( ! MCP_WC_Ability_Execution_Module::can_manage_taxonomy( $taxonomy ) ) {
 				return mcp_wc_error( 'mcp_wc_forbidden_term', 'You do not have permission to manage this attribute taxonomy.' );
 			}

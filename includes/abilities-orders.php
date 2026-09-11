@@ -111,8 +111,20 @@ function mcp_wc_register_orders_query(): void {
 			if ( isset( $input['parent'] ) ) { $args['parent'] = (int) $input['parent']; }
 			if ( ! empty( $input['orderby'] ) ) { $args['orderby'] = sanitize_text_field( $input['orderby'] ); }
 			if ( ! empty( $input['order'] ) ) { $args['order'] = strtoupper( sanitize_text_field( $input['order'] ) ); }
-			if ( ! empty( $input['date_after'] ) ) { $args['date_after'] = sanitize_text_field( $input['date_after'] ); }
-			if ( ! empty( $input['date_before'] ) ) { $args['date_before'] = sanitize_text_field( $input['date_before'] ); }
+			if ( ! empty( $input['date_after'] ) || ! empty( $input['date_before'] ) ) {
+				$after  = ! empty( $input['date_after'] ) ? mcp_wc_parse_date( (string) $input['date_after'] ) : null;
+				$before = ! empty( $input['date_before'] ) ? mcp_wc_parse_date( (string) $input['date_before'] ) : null;
+				if ( ( ! empty( $input['date_after'] ) && ! $after ) || ( ! empty( $input['date_before'] ) && ! $before ) ) {
+					return mcp_wc_error( 'mcp_wc_invalid_order_date', 'The order creation date filter is invalid.' );
+				}
+				if ( $after && $before ) {
+					$args['date_created'] = $after->getTimestamp() . '...' . $before->getTimestamp();
+				} elseif ( $after ) {
+					$args['date_created'] = '>' . $after->getTimestamp();
+				} elseif ( $before ) {
+					$args['date_created'] = '<' . $before->getTimestamp();
+				}
+			}
 			if ( ! empty( $input['modified_after'] ) || ! empty( $input['modified_before'] ) ) {
 				$after  = ! empty( $input['modified_after'] ) ? mcp_wc_parse_date( $input['modified_after'] ) : null;
 				$before = ! empty( $input['modified_before'] ) ? mcp_wc_parse_date( $input['modified_before'] ) : null;

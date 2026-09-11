@@ -154,7 +154,9 @@ final class MCP_WC_Commerce_Administration_Module {
 	public static function add_shipping_method( array $input ) {
 		$guard = self::guard( $input, 'woocommerce-mcp/shipping-method-add' );
 		if ( $guard ) { return $guard; }
-		$zone = new \WC_Shipping_Zone( (int) ( $input['zone_id'] ?? 0 ) );
+		$zone_id = (int) ( $input['zone_id'] ?? 0 );
+		$zone    = 0 === $zone_id ? new \WC_Shipping_Zone( 0 ) : \WC_Shipping_Zones::get_zone( $zone_id );
+		if ( ! $zone ) { return mcp_wc_error( 'mcp_wc_shipping_zone_not_found', 'Shipping zone not found.' ); }
 		$instance_id = (int) $zone->add_shipping_method( sanitize_key( (string) $input['method_id'] ) );
 		if ( $instance_id < 1 ) { return mcp_wc_error( 'mcp_wc_shipping_method_add_failed', 'The shipping method could not be added to this zone.' ); }
 		return array( 'zone' => mcp_wc_format_shipping_zone( $zone ), 'instance_id' => $instance_id );

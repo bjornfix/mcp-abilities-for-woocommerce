@@ -5,7 +5,7 @@ Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 8.0
 Requires Plugins: woocommerce
-Stable tag: 0.2.12
+Stable tag: 0.2.13
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -58,6 +58,11 @@ System tools are disabled by default. Explicitly allow only required tool IDs th
 
 == Changelog ==
 
+= 0.2.13 =
+
+* Fixed low-stock product filtering, order creation-date filtering, attribute taxonomy handling, webhook listing, shipping-zone lookup, and optional email output normalization.
+* Improved email settings compatibility with WooCommerce email extensions.
+
 = 0.2.12 =
 
 * Fixed system-status compatibility with WooCommerce 11.1.0 by accepting both array and WP_REST_Response controller results.
@@ -77,6 +82,10 @@ System tools are disabled by default. Explicitly allow only required tool IDs th
 * Previous public baseline.
 
 == Upgrade Notice ==
+
+= 0.2.13 =
+
+Fixes WooCommerce query compatibility and output validation for low-stock products, attributes, webhooks, shipping zones, customers, and reviews.
 
 = 0.2.12 =
 

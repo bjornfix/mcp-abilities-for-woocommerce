@@ -313,8 +313,8 @@ function mcp_wc_register_shipping_zones_query(): void {
 			}
 
 			if ( isset( $input['id'] ) ) {
-				$zone = new \WC_Shipping_Zone( (int) $input['id'] );
-				if ( 0 !== (int) $input['id'] && ! $zone->get_id() ) {
+				$zone = \WC_Shipping_Zones::get_zone( (int) $input['id'] );
+				if ( ! $zone ) {
 					return array( 'zones' => array() );
 				}
 				return array( 'zones' => array( mcp_wc_format_shipping_zone( $zone ) ) );
@@ -551,13 +551,22 @@ function mcp_wc_register_webhooks_query(): void {
 				$args['status'] = sanitize_text_field( $input['status'] );
 			}
 
-			$webhooks = wc_get_webhooks( 'ASC', $args );
-			$has_more = count( $webhooks ) > $per_page;
-			$webhooks = array_slice( $webhooks, 0, $per_page );
+			$args['order']   = 'ASC';
+			$args['orderby'] = 'id';
+			$data_store = \WC_Data_Store::load( 'webhook' );
+			$webhook_ids = $data_store->search_webhooks( $args );
+			if ( ! is_array( $webhook_ids ) ) {
+				return mcp_wc_error( 'mcp_wc_webhook_query_failed', 'The webhook query did not return a valid result.' );
+			}
+			$has_more = count( $webhook_ids ) > $per_page;
+			$webhook_ids = array_slice( $webhook_ids, 0, $per_page );
 
 			$items = array();
-			foreach ( $webhooks as $webhook ) {
-				$items[] = mcp_wc_format_webhook( $webhook );
+			foreach ( $webhook_ids as $webhook_id ) {
+				$webhook = wc_get_webhook( (int) $webhook_id );
+				if ( $webhook ) {
+					$items[] = mcp_wc_format_webhook( $webhook );
+				}
 			}
 
 			return array(
@@ -1099,31 +1108,53 @@ function mcp_wc_register_email_settings(): void {
 				return array( 'error' => 'Permission denied.' );
 			}
 
-			$mailer          = WC()->mailer();
+			if ( ! class_exists( '\WC_Emails' ) ) {
+				return mcp_wc_error( 'mcp_wc_email_mailer_unavailable', 'WooCommerce email settings are unavailable.' );
+			}
+
+			$mailer = \WC_Emails::instance();
 			$email_templates = $mailer->get_emails();
+			if ( ! is_array( $email_templates ) ) {
+				return mcp_wc_error( 'mcp_wc_email_query_failed', 'WooCommerce email settings returned an invalid template list.' );
+			}
 
 			$emails = array();
-			foreach ( $email_templates as $email ) {
-				$emails[] = array(
-					'id'          => $email->id,
-					'title'       => $email->get_title(),
-					'description' => $email->get_description(),
-					'enabled'     => $email->is_enabled() ? 'yes' : 'no',
-					'recipient'   => $email->get_recipient(),
-					'subject'     => $email->get_subject(),
-				);
+			foreach ( $email_templates as $email_key => $email ) {
+				if ( ! $email instanceof \WC_Email ) {
+					continue;
+				}
+				try {
+					$email_id = isset( $email->id ) ? $email->id : $email_key;
+					if ( ! is_scalar( $email_id ) || '' === (string) $email_id ) {
+						continue;
+					}
+					$title       = $email->get_title();
+					$description = $email->get_description();
+					$recipient   = $email->get_recipient();
+					$subject     = $email->get_subject();
+					$emails[] = array(
+						'id'          => (string) $email_id,
+						'title'       => is_scalar( $title ) ? (string) $title : '',
+						'description' => is_scalar( $description ) ? (string) $description : '',
+						'enabled'     => $email->is_enabled() ? 'yes' : 'no',
+						'recipient'   => is_scalar( $recipient ) ? (string) $recipient : '',
+						'subject'     => is_scalar( $subject ) ? (string) $subject : '',
+					);
+				} catch ( \Throwable $e ) {
+					continue;
+				}
 			}
 
 			return array(
 				'mailer'                => array( 'enabled' => true ),
-				'from_name'             => get_option( 'woocommerce_email_from_name', '' ),
-				'from_address'          => get_option( 'woocommerce_email_from_address', '' ),
-				'header_image'          => get_option( 'woocommerce_email_header_image', '' ),
-				'footer_text'           => get_option( 'woocommerce_email_footer_text', '' ),
-				'base_color'            => get_option( 'woocommerce_email_base_color', '' ),
-				'background_color'      => get_option( 'woocommerce_email_background_color', '' ),
-				'body_background_color' => get_option( 'woocommerce_email_body_background_color', '' ),
-				'body_text_color'       => get_option( 'woocommerce_email_body_text_color', '' ),
+				'from_name'             => (string) $mailer->get_from_name(),
+				'from_address'          => (string) $mailer->get_from_address(),
+				'header_image'          => (string) get_option( 'woocommerce_email_header_image', '' ),
+				'footer_text'           => (string) get_option( 'woocommerce_email_footer_text', '' ),
+				'base_color'            => (string) get_option( 'woocommerce_email_base_color', '' ),
+				'background_color'      => (string) get_option( 'woocommerce_email_background_color', '' ),
+				'body_background_color' => (string) get_option( 'woocommerce_email_body_background_color', '' ),
+				'body_text_color'       => (string) get_option( 'woocommerce_email_body_text_color', '' ),
 				'emails'                => $emails,
 			);
 		},

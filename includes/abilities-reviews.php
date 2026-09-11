@@ -16,7 +16,7 @@ function mcp_wc_register_review_abilities(): void {
 function mcp_wc_review_schema(): array {
 	return array( 'type' => 'object', 'properties' => array(
 		'id' => array( 'type' => 'integer' ), 'product_id' => array( 'type' => 'integer' ), 'product_name' => array( 'type' => 'string' ),
-		'status' => array( 'type' => 'string' ), 'reviewer' => array( 'type' => 'string' ), 'email' => array( 'type' => 'string', 'format' => 'email' ),
+		'status' => array( 'type' => 'string' ), 'reviewer' => array( 'type' => 'string' ), 'email' => array( 'type' => array( 'string', 'null' ), 'format' => 'email' ),
 		'rating' => array( 'type' => array( 'integer', 'null' ) ), 'review' => array( 'type' => 'string' ),
 		'date_created' => array( 'type' => array( 'string', 'null' ), 'format' => 'date-time' ),
 	), 'additionalProperties' => false );
@@ -116,5 +116,5 @@ function mcp_wc_register_review_delete(): void {
 }
 
 function mcp_wc_format_review( WP_Comment $comment ): array {
-	return array( 'id' => (int) $comment->comment_ID, 'product_id' => (int) $comment->comment_post_ID, 'product_name' => get_the_title( $comment->comment_post_ID ), 'status' => wp_get_comment_status( $comment->comment_ID ), 'reviewer' => $comment->comment_author, 'email' => $comment->comment_author_email, 'rating' => (int) get_comment_meta( $comment->comment_ID, 'rating', true ) ?: null, 'review' => $comment->comment_content, 'date_created' => $comment->comment_date_gmt ? gmdate( 'Y-m-d\TH:i:s', strtotime( $comment->comment_date_gmt ) ) : null );
+	return array( 'id' => (int) $comment->comment_ID, 'product_id' => (int) $comment->comment_post_ID, 'product_name' => get_the_title( $comment->comment_post_ID ), 'status' => wp_get_comment_status( $comment->comment_ID ), 'reviewer' => $comment->comment_author, 'email' => mcp_wc_nullable_email( $comment->comment_author_email ), 'rating' => (int) get_comment_meta( $comment->comment_ID, 'rating', true ) ?: null, 'review' => $comment->comment_content, 'date_created' => $comment->comment_date_gmt ? gmdate( 'Y-m-d\TH:i:s', strtotime( $comment->comment_date_gmt ) ) : null );
 }

@@ -50,7 +50,7 @@ function mcp_wc_register_customers_query(): void {
 					'type'       => 'object',
 					'properties' => array(
 						'id'               => array( 'type' => 'integer' ),
-						'email'            => array( 'type' => 'string', 'format' => 'email' ),
+						'email'            => array( 'type' => array( 'string', 'null' ), 'format' => 'email' ),
 						'first_name'       => array( 'type' => 'string' ),
 						'last_name'        => array( 'type' => 'string' ),
 						'display_name'     => array( 'type' => 'string' ),
@@ -62,7 +62,7 @@ function mcp_wc_register_customers_query(): void {
 							'address_2'  => array( 'type' => 'string' ), 'city'       => array( 'type' => 'string' ),
 							'state'      => array( 'type' => 'string' ), 'postcode'   => array( 'type' => 'string' ),
 							'country'    => array( 'type' => 'string' ), 'phone'      => array( 'type' => 'string' ),
-							'email'      => array( 'type' => 'string', 'format' => 'email' ),
+							'email'      => array( 'type' => array( 'string', 'null' ), 'format' => 'email' ),
 						), 'additionalProperties' => false ),
 						'shipping'        => array( 'type' => 'object', 'properties' => array(
 							'first_name' => array( 'type' => 'string' ), 'last_name' => array( 'type' => 'string' ),
@@ -463,7 +463,8 @@ function mcp_wc_format_customer( \WP_User $user ): array {
 	$billing  = array();
 	foreach ( $billing_fields as $field ) {
 		$method = "get_billing_{$field}";
-		$billing[ $field ] = $customer->$method();
+		$value = $customer->$method();
+		$billing[ $field ] = 'email' === $field ? mcp_wc_nullable_email( $value ) : $value;
 	}
 
 	$shipping = array();
@@ -474,7 +475,7 @@ function mcp_wc_format_customer( \WP_User $user ): array {
 
 	return array(
 		'id'              => $user->ID,
-		'email'           => $user->user_email,
+		'email'           => mcp_wc_nullable_email( $user->user_email ),
 		'first_name'      => $user->first_name,
 		'last_name'       => $user->last_name,
 		'display_name'    => $user->display_name,

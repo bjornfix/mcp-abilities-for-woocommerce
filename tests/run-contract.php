@@ -15,9 +15,15 @@ class WP_REST_Response {
 	public function get_data() { return $this->data; }
 }
 class WP_User { public array $roles = array(); }
+class WC_Product {
+	public function __construct( private bool $stock_managed, private $stock_quantity ) {}
+	public function managing_stock(): bool { return $this->stock_managed; }
+	public function get_stock_quantity() { return $this->stock_quantity; }
+}
 
 $abilities = array(); $existing = array(); $caps = array();
 function sanitize_key( $value ) { return strtolower( preg_replace( '/[^a-z0-9_\-]/', '', (string) $value ) ); }
+function sanitize_title( $value ) { return sanitize_key( str_replace( ' ', '-', (string) $value ) ); }
 function sanitize_text_field( $value ) { return trim( (string) $value ); }
 function esc_url_raw( $value, $protocols = null ) { return filter_var( $value, FILTER_VALIDATE_URL ) ? (string) $value : ''; }
 function wp_http_validate_url( $value ) { return false !== filter_var( $value, FILTER_VALIDATE_URL ); }
@@ -27,8 +33,10 @@ function current_user_can( $capability, ...$args ) { global $caps; return ! empt
 function get_taxonomy( $taxonomy ) { return (object) array( 'cap' => (object) array( 'manage_terms' => 'manage_' . $taxonomy ) ); }
 function wp_has_ability( $name ) { global $abilities, $existing; return isset( $abilities[ $name ] ) || isset( $existing[ $name ] ); }
 function wp_register_ability( $name, $args ) { global $abilities; $abilities[ $name ] = $args; }
+function wc_get_low_stock_amount( $product ) { return 2; }
 
 require dirname( __DIR__ ) . '/includes/class-ability-execution-module.php';
+require dirname( __DIR__ ) . '/includes/abilities-products.php';
 require dirname( __DIR__ ) . '/includes/abilities-settings.php';
 
 $failures = array();
@@ -75,6 +83,31 @@ $products = source( 'includes/abilities-products.php' ); $settings = source( 'in
 $reports = source( 'includes/abilities-reports.php' ); $customers = source( 'includes/abilities-customers.php' );
 $administration = source( 'includes/class-commerce-administration-module.php' ); $administration_abilities = source( 'includes/abilities-administration.php' );
 $main = source( 'mcp-abilities-for-woocommerce.php' );
+expect_true( mcp_wc_product_is_low_stock( new WC_Product( true, 2 ) ), 'Low-stock detection must include stock at the effective threshold.' );
+expect_true( ! mcp_wc_product_is_low_stock( new WC_Product( true, 3 ) ), 'Low-stock detection must exclude stock above the effective threshold.' );
+expect_true( ! mcp_wc_product_is_low_stock( new WC_Product( false, 0 ) ), 'Low-stock detection must exclude products that do not manage stock.' );
+$raw_attribute = mcp_wc_format_attribute( (object) array( 'attribute_id' => 7, 'attribute_label' => 'Color', 'attribute_name' => 'color', 'attribute_type' => 'select', 'attribute_orderby' => 'menu_order', 'attribute_public' => 1 ) );
+$normalized_attribute = mcp_wc_format_attribute( (object) array( 'id' => 7, 'name' => 'Color', 'slug' => 'pa_color', 'type' => 'select', 'order_by' => 'menu_order', 'has_archives' => true ) );
+expect_true( 'color' === $raw_attribute['slug'] && 'color' === $normalized_attribute['slug'], 'Attribute formatting must accept raw and normalized WooCommerce objects consistently.' );
+$products_query_start = strpos( $products, 'function mcp_wc_register_products_query' );
+$products_create_start = strpos( $products, 'function mcp_wc_register_product_create' );
+$products_query_source = false !== $products_query_start && false !== $products_create_start ? substr( $products, $products_query_start, $products_create_start - $products_query_start ) : '';
+expect_true( false === str_contains( $products_query_source, 'low_in_stock' ) && str_contains( $products, "'manage_stock'] = true" ) && str_contains( $products, 'mcp_wc_product_is_low_stock' ), 'Product low-stock queries must use bounded native candidates and WooCommerce threshold evaluation.' );
+$orders_query_start = strpos( $orders, 'function mcp_wc_register_orders_query' );
+$order_create_start = strpos( $orders, 'function mcp_wc_register_order_create' );
+$orders_query_source = false !== $orders_query_start && false !== $order_create_start ? substr( $orders, $orders_query_start, $order_create_start - $orders_query_start ) : '';
+expect_true( str_contains( $orders_query_source, "\$args['date_created']" ) && false === str_contains( $orders_query_source, "\$args['date_after']" ) && false === str_contains( $orders_query_source, "\$args['date_before']" ), 'Order creation date filters must use WooCommerce date_created query syntax.' );
+$tag_update_start = strpos( $products, 'function mcp_wc_register_tag_update' );
+$tag_delete_start = strpos( $products, 'function mcp_wc_register_tag_delete' );
+$tag_update_source = false !== $tag_update_start && false !== $tag_delete_start ? substr( $products, $tag_update_start, $tag_delete_start - $tag_update_start ) : '';
+expect_true( false === str_contains( $tag_update_source, 'attribute_id' ) && str_contains( $tag_update_source, "'required'             => array( 'id' )" ), 'Tag updates must not require an unrelated attribute ID.' );
+expect_true( 4 === substr_count( $products, 'mcp_wc_attribute_taxonomy_name( $attribute )' ), 'Attribute term paths must resolve the taxonomy through one normalized helper.' );
+expect_true( str_contains( $settings, 'WC_Shipping_Zones::get_zone' ) && false === str_contains( $settings, 'wc_get_webhooks' ) && str_contains( $settings, 'search_webhooks' ), 'Shipping-zone and webhook queries must use WooCommerce safe native APIs.' );
+expect_true( str_contains( $settings, "WC_Emails::instance()" ) && str_contains( $settings, 'instanceof \\WC_Email' ), 'Email settings must use the native WooCommerce email manager and validate template objects.' );
+expect_true( str_contains( $customers, "'email'            => array( 'type' => array( 'string', 'null' )" ) && str_contains( $customers, "'email'      => array( 'type' => array( 'string', 'null' )" ) && str_contains( $reviews = source( 'includes/abilities-reviews.php' ), "'email' => array( 'type' => array( 'string', 'null' )" ), 'Optional customer and review email outputs must allow null.' );
+expect_true( str_contains( $reports, "'email' => array( 'type' => array( 'string', 'null' )" ) && str_contains( $reports, 'mcp_wc_nullable_email( $user->user_email )' ), 'Customer reports must normalize optional customer email values.' );
+expect_true( str_contains( $administration, 'WC_Shipping_Zones::get_zone( $zone_id )' ) && str_contains( $administration, 'mcp_wc_shipping_zone_not_found' ), 'Shipping method additions must validate non-default zone IDs through WooCommerce.' );
+expect_true( str_contains( $main, 'managing_stock()' ) && str_contains( $main, 'function mcp_wc_nullable_email' ), 'Product and email output formatters must normalize native values to their declared schemas.' );
 $array_result = array( 'status' => 'ok' );
 $object_result = new WP_REST_Response( array( 'status' => 'ok' ) );
 expect_true( $array_result === mcp_wc_unwrap_rest_result( $array_result ), 'System-status normalization must preserve array controller results.' );
@@ -104,7 +137,7 @@ expect_true( str_contains( $settings, 'WC_REST_Taxes_Controller' ) && false === 
 expect_true( str_contains( $administration, 'sanitize_country_codes' ) && str_contains( $administration_abilities, 'shipping_country_codes' ), 'Store-country modes must persist explicit validated country lists.' );
 expect_true( str_contains( $products, "confirmation_schema( 'woocommerce-mcp/product-update' )" ) && str_contains( $products, 'set_category_ids' ), 'Catalog mutations must use confirmed WooCommerce CRUD writes.' );
 expect_true( false === str_contains( $main, "add_filter( 'woocommerce_currency_symbol'" ), 'The generic MCP plugin must not override storefront currency presentation.' );
-expect_true( str_contains( $main, 'Version: 0.2.12' ) && str_contains( source( 'readme.txt' ), 'Stable tag: 0.2.12' ), 'Runtime and package versions must stay aligned.' );
+expect_true( str_contains( $main, 'Version: 0.2.13' ) && str_contains( source( 'readme.txt' ), 'Stable tag: 0.2.13' ), 'Runtime and package versions must stay aligned.' );
 expect_true( str_contains( $main, 'Requires Plugins: woocommerce' ) && false === str_contains( $main, 'woocommerce, abilities-api' ), 'WordPress 6.9 core Abilities support must not be declared as a separate plugin dependency.' );
 
 $readme = source( 'README.md' );
@@ -123,7 +156,7 @@ if ( false !== $inventory_start && false !== $inventory_end && $inventory_end > 
 		expect_true( str_contains( $registration_source, "'woocommerce-mcp/{$short_name}'" ) || str_contains( $registration_source, "'woocommerce/{$short_name}'" ) || str_contains( $administration_abilities, "'{$short_name}'" ), 'Documented ability must have a source registration: ' . $ability_name );
 	}
 }
-expect_true( str_contains( $readme, '**Stable version:** 0.2.12' ) && str_contains( $readme, '**Tested with WordPress:** 7.1' ), 'README release metadata must stay aligned.' );
+expect_true( str_contains( $readme, '**Stable version:** 0.2.13' ) && str_contains( $readme, '**Tested with WordPress:** 7.1' ), 'README release metadata must stay aligned.' );
 expect_true( str_contains( $readme, '**Tags:** woocommerce, mcp, abilities, ai, automation' ), 'README tags must stay aligned with readme.txt.' );
 
 if ( $failures ) { fwrite( STDERR, "Contract failures:\n- " . implode( "\n- ", $failures ) . "\n" ); exit( 1 ); }

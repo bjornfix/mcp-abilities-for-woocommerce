@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities for WooCommerce
  * Plugin URI: https://devenia.com/plugins/mcp-abilities-for-woocommerce/
  * Description: Comprehensive WooCommerce abilities for MCP. Products, orders, coupons, customers, reports, settings, reviews, shipping, tax, and webhooks.
- * Version: 0.2.12
+ * Version: 0.2.13
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -48,6 +48,21 @@ function mcp_wc_get_currency(): string {
 
 function mcp_wc_get_currency_symbol(): string {
 	return function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol() : '$';
+}
+
+/**
+ * Normalize an optional email address for output schemas.
+ *
+ * WordPress and WooCommerce allow legacy customer/review records without an
+ * email address, while the public output contract represents that state as
+ * null rather than an invalid empty email string.
+ *
+ * @param mixed $email Candidate email value.
+ * @return string|null A valid email address or null.
+ */
+function mcp_wc_nullable_email( $email ): ?string {
+	$email = sanitize_email( (string) $email );
+	return '' !== $email && is_email( $email ) ? $email : null;
 }
 
 /**
@@ -150,7 +165,8 @@ function mcp_wc_format_downloads( \WC_Product $product ): array {
  * @return array<string,mixed>
  */
 function mcp_wc_format_product( \WC_Product $product ): array {
-	$id = $product->get_id();
+	$id              = $product->get_id();
+	$managing_stock  = $product->managing_stock();
 
 	return array(
 		'id'                 => $id,
@@ -166,8 +182,8 @@ function mcp_wc_format_product( \WC_Product $product ): array {
 		'regular_price'      => $product->get_regular_price(),
 		'sale_price'         => $product->get_sale_price(),
 		'stock_status'       => $product->get_stock_status(),
-		'stock_quantity'     => $product->get_manage_stock() ? $product->get_stock_quantity() : null,
-		'manage_stock'       => $product->get_manage_stock(),
+		'stock_quantity'     => $managing_stock ? $product->get_stock_quantity() : null,
+		'manage_stock'       => (bool) $managing_stock,
 		'virtual'            => $product->is_virtual(),
 		'downloadable'       => $product->is_downloadable(),
 		'external_url'       => $product->get_type() === 'external' ? $product->get_product_url() : null,
@@ -211,7 +227,7 @@ function mcp_wc_format_order( \WC_Order $order, bool $include_line_items = false
 		'currency_symbol'       => html_entity_decode( get_woocommerce_currency_symbol( $order->get_currency() ) ),
 		'total'                 => $order->get_total(),
 		'customer_id'           => $order->get_customer_id(),
-		'billing_email'         => $order->get_billing_email() ?: null,
+		'billing_email'         => mcp_wc_nullable_email( $order->get_billing_email() ),
 		'payment_method'        => $order->get_payment_method(),
 		'payment_method_title'  => $order->get_payment_method_title(),
 		'date_created'          => mcp_wc_date_to_iso( $order->get_date_created() ),

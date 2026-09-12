@@ -21,6 +21,10 @@ final class MCP_WC_Order_Lifecycle_Module {
 		if ( ! current_user_can( 'edit_shop_orders' ) ) {
 			return mcp_wc_error( 'mcp_wc_forbidden_order', 'You do not have permission to create Orders.' );
 		}
+		$status = sanitize_key( $input['status'] ?? 'pending' );
+		if ( ! in_array( $status, mcp_wc_allowed_order_statuses(), true ) ) {
+			return mcp_wc_error( 'mcp_wc_invalid_order_status', 'The requested Order status is not registered.' );
+		}
 
 		$line_items = self::resolve_line_items( $input['line_items'] ?? array() );
 		if ( is_wp_error( $line_items ) ) {
@@ -38,7 +42,7 @@ final class MCP_WC_Order_Lifecycle_Module {
 			$order = wc_create_order(
 				array(
 					'customer_id' => $customer_id,
-					'status'      => sanitize_key( $input['status'] ?? 'pending' ),
+					'status'      => $status,
 				)
 			);
 			if ( is_wp_error( $order ) ) {

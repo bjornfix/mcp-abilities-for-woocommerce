@@ -97,16 +97,23 @@ final class MCP_WC_Commerce_Administration_Module {
 			'tax_rate_order'    => max( 0, (int) ( $input['order'] ?? 0 ) ),
 			'tax_rate_class'    => sanitize_title( (string) ( $input['class'] ?? '' ) ),
 		);
+		$postcodes = implode( ';', array_map( 'wc_clean', (array) ( $input['postcodes'] ?? array() ) ) );
+		$cities    = implode( ';', array_map( 'wc_clean', (array) ( $input['cities'] ?? array() ) ) );
 		$id = (int) ( $input['id'] ?? 0 );
 		if ( $id > 0 ) {
 			if ( ! \WC_Tax::_get_tax_rate( $id ) ) { return mcp_wc_error( 'mcp_wc_tax_rate_not_found', 'Tax rate not found.' ); }
 			\WC_Tax::_update_tax_rate( $id, $rate );
 		} else {
-			$id = (int) \WC_Tax::_insert_tax_rate( $rate );
+			$inserted_id = \WC_Tax::_insert_tax_rate( $rate );
+			if ( is_wp_error( $inserted_id ) ) { return $inserted_id; }
+			$id = (int) $inserted_id;
+			if ( $id < 1 ) { return mcp_wc_error( 'mcp_wc_tax_rate_save_failed', 'The tax rate could not be saved.' ); }
 		}
-		\WC_Tax::_update_tax_rate_postcodes( $id, implode( ';', array_map( 'wc_clean', (array) ( $input['postcodes'] ?? array() ) ) ) );
-		\WC_Tax::_update_tax_rate_cities( $id, implode( ';', array_map( 'wc_clean', (array) ( $input['cities'] ?? array() ) ) ) );
-		return array( 'tax_rate' => mcp_wc_format_tax_rate( (array) \WC_Tax::_get_tax_rate( $id ) ) );
+		\WC_Tax::_update_tax_rate_postcodes( $id, $postcodes );
+		\WC_Tax::_update_tax_rate_cities( $id, $cities );
+		$stored = \WC_Tax::_get_tax_rate( $id );
+		if ( ! $stored ) { return mcp_wc_error( 'mcp_wc_tax_rate_save_failed', 'The tax rate could not be read after saving.' ); }
+		return array( 'tax_rate' => mcp_wc_format_tax_rate( (array) $stored ) );
 	}
 
 	/** @return array<string,mixed>|WP_Error */
@@ -115,7 +122,9 @@ final class MCP_WC_Commerce_Administration_Module {
 		if ( $guard ) { return $guard; }
 		$id = (int) ( $input['id'] ?? 0 );
 		if ( ! \WC_Tax::_get_tax_rate( $id ) ) { return mcp_wc_error( 'mcp_wc_tax_rate_not_found', 'Tax rate not found.' ); }
-		\WC_Tax::_delete_tax_rate( $id );
+		$result = \WC_Tax::_delete_tax_rate( $id );
+		if ( is_wp_error( $result ) ) { return $result; }
+		if ( \WC_Tax::_get_tax_rate( $id ) ) { return mcp_wc_error( 'mcp_wc_tax_rate_delete_failed', 'The tax rate could not be deleted.' ); }
 		return array( 'deleted' => true, 'id' => $id );
 	}
 

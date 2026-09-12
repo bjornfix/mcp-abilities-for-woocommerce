@@ -7,12 +7,12 @@
 
 Secure, structured WooCommerce management for MCP clients through the WordPress Abilities API.
 
-**Stable version:** 0.2.13<br>
+**Stable version:** 0.2.14<br>
 **Tested with WordPress:** 7.1<br>
 **License:** GPL-2.0-or-later<br>
 **Tags:** woocommerce, mcp, abilities, ai, automation
 
-Version 0.2.13 exposes 79 canonical abilities under `woocommerce-mcp/*`. They cover products, orders, customers, coupons, reviews, reports, store configuration, tax, shipping, payment gateways, webhooks, and operational diagnostics.
+Version 0.2.14 exposes 79 canonical abilities under `woocommerce-mcp/*`. They cover products, orders, customers, coupons, reviews, reports, store configuration, tax, shipping, payment gateways, webhooks, and operational diagnostics.
 
 ## What It Does
 
@@ -284,6 +284,13 @@ git diff --check
 Release candidates must also pass WordPress Plugin Check on a development WordPress site with WooCommerce and the Abilities API active.
 
 ## Recent Changes
+
+### 0.2.14
+
+- Fixed variation creation for global and custom attributes, including WooCommerce taxonomy keys and term slugs.
+- Returned RFC3339 dates with correct local/GMT timezone data across product, order, customer, review, coupon, and webhook outputs.
+- Fixed attribute-term pagination and taxonomy-specific capability checks.
+- Normalized WooCommerce system-tool responses, invalid order-date failures, nullable term links, sold-individually output, and tax-rate mutation postconditions.
 
 ### 0.2.13
 

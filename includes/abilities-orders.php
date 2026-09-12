@@ -126,8 +126,11 @@ function mcp_wc_register_orders_query(): void {
 				}
 			}
 			if ( ! empty( $input['modified_after'] ) || ! empty( $input['modified_before'] ) ) {
-				$after  = ! empty( $input['modified_after'] ) ? mcp_wc_parse_date( $input['modified_after'] ) : null;
-				$before = ! empty( $input['modified_before'] ) ? mcp_wc_parse_date( $input['modified_before'] ) : null;
+				$after  = ! empty( $input['modified_after'] ) ? mcp_wc_parse_date( (string) $input['modified_after'] ) : null;
+				$before = ! empty( $input['modified_before'] ) ? mcp_wc_parse_date( (string) $input['modified_before'] ) : null;
+				if ( ( ! empty( $input['modified_after'] ) && ! $after ) || ( ! empty( $input['modified_before'] ) && ! $before ) ) {
+					return mcp_wc_error( 'mcp_wc_invalid_order_date', 'The order modification date filter is invalid.' );
+				}
 				if ( $after && $before ) {
 					$args['date_modified'] = $after->getTimestamp() . '...' . $before->getTimestamp();
 				} elseif ( $after ) {
@@ -561,7 +564,7 @@ function mcp_wc_register_order_notes_query(): void {
 				$items[] = array(
 					'id'            => (int) $note->id,
 					'content'       => $note->content,
-					'date_created'  => $note->date_created->date( 'Y-m-d\TH:i:s' ),
+					'date_created'  => mcp_wc_date_to_iso( $note->date_created ),
 					'customer_note' => (bool) $note->customer_note,
 					'added_by'      => $note->added_by,
 				);

@@ -116,5 +116,6 @@ function mcp_wc_register_review_delete(): void {
 }
 
 function mcp_wc_format_review( WP_Comment $comment ): array {
-	return array( 'id' => (int) $comment->comment_ID, 'product_id' => (int) $comment->comment_post_ID, 'product_name' => get_the_title( $comment->comment_post_ID ), 'status' => wp_get_comment_status( $comment->comment_ID ), 'reviewer' => $comment->comment_author, 'email' => mcp_wc_nullable_email( $comment->comment_author_email ), 'rating' => (int) get_comment_meta( $comment->comment_ID, 'rating', true ) ?: null, 'review' => $comment->comment_content, 'date_created' => $comment->comment_date_gmt ? gmdate( 'Y-m-d\TH:i:s', strtotime( $comment->comment_date_gmt ) ) : null );
+	$created_at = $comment->comment_date_gmt ? strtotime( $comment->comment_date_gmt . ' UTC' ) : false;
+	return array( 'id' => (int) $comment->comment_ID, 'product_id' => (int) $comment->comment_post_ID, 'product_name' => get_the_title( $comment->comment_post_ID ), 'status' => wp_get_comment_status( $comment->comment_ID ), 'reviewer' => $comment->comment_author, 'email' => mcp_wc_nullable_email( $comment->comment_author_email ), 'rating' => (int) get_comment_meta( $comment->comment_ID, 'rating', true ) ?: null, 'review' => $comment->comment_content, 'date_created' => false !== $created_at ? gmdate( 'c', $created_at ) : null );
 }

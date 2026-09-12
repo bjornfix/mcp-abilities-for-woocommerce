@@ -456,6 +456,7 @@ function mcp_wc_register_customer_delete(): void {
 
 function mcp_wc_format_customer( \WP_User $user ): array {
 	$customer = new \WC_Customer( $user->ID );
+	$registered_at = $user->user_registered ? strtotime( $user->user_registered . ' UTC' ) : false;
 
 	$billing_fields  = array( 'first_name', 'last_name', 'company', 'address_1', 'address_2', 'city', 'state', 'postcode', 'country', 'phone', 'email' );
 	$shipping_fields = array( 'first_name', 'last_name', 'company', 'address_1', 'address_2', 'city', 'state', 'postcode', 'country' );
@@ -485,6 +486,6 @@ function mcp_wc_format_customer( \WP_User $user ): array {
 		'shipping'        => $shipping,
 		'total_spent'     => (string) wc_get_customer_total_spent( $user->ID ),
 		'order_count'     => (int) wc_get_customer_order_count( $user->ID ),
-		'date_created'    => $user->user_registered ? gmdate( 'Y-m-d\TH:i:s', strtotime( $user->user_registered . ' UTC' ) ) : null,
+		'date_created'    => false !== $registered_at ? gmdate( 'c', $registered_at ) : null,
 	);
 }

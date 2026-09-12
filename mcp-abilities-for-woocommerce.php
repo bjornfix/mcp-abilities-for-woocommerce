@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities for WooCommerce
  * Plugin URI: https://devenia.com/plugins/mcp-abilities-for-woocommerce/
  * Description: Comprehensive WooCommerce abilities for MCP. Products, orders, coupons, customers, reports, settings, reviews, shipping, tax, and webhooks.
- * Version: 0.2.13
+ * Version: 0.2.14
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -198,7 +198,7 @@ function mcp_wc_format_product( \WC_Product $product ): array {
 		'tax_class'            => $product->get_tax_class(),
 		'shipping_class'       => $product->get_shipping_class(),
 		'shipping_class_id'    => $product->get_shipping_class_id() ? (int) $product->get_shipping_class_id() : null,
-		'sold_individually'    => 'yes' === $product->get_sold_individually(),
+		'sold_individually'    => (bool) $product->get_sold_individually(),
 		'backorders'           => $product->get_backorders(),
 		'low_stock_amount'     => '' !== $product->get_low_stock_amount() ? (int) $product->get_low_stock_amount() : null,
 		'reviews_allowed'      => (bool) $product->get_reviews_allowed(),
@@ -318,8 +318,8 @@ function mcp_wc_date_to_iso( $date, bool $gmt = false ): ?string {
 	}
 	try {
 		return $gmt
-			? gmdate( 'Y-m-d\TH:i:s', $date->getOffsetTimestamp() )
-			: $date->date( 'Y-m-d\TH:i:s' );
+			? gmdate( 'c', $date->getTimestamp() )
+			: $date->date( 'c' );
 	} catch ( \Exception $e ) {
 		return null;
 	}

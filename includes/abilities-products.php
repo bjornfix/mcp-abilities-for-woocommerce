@@ -68,6 +68,53 @@ function mcp_wc_product_is_low_stock( \WC_Product $product ): bool {
 }
 
 /**
+ * Normalize MCP variation attributes to WooCommerce's stored representation.
+ *
+ * Global attributes are stored with their taxonomy name and taxonomy values
+ * are stored as term slugs. Custom product attributes keep their text value.
+ *
+ * @param array<string,mixed> $attributes Attribute key/value pairs.
+ * @return array<string,string>
+ */
+function mcp_wc_normalize_variation_attributes( array $attributes ): array {
+	$normalized = array();
+
+	foreach ( $attributes as $key => $value ) {
+		$key = sanitize_title( (string) $key );
+		if ( '' === $key ) {
+			continue;
+		}
+
+		$attribute_name = str_starts_with( $key, 'attribute_' ) ? substr( $key, strlen( 'attribute_' ) ) : $key;
+		$attribute_name = sanitize_title( $attribute_name );
+		$taxonomy       = '';
+
+		if ( str_starts_with( $attribute_name, 'pa_' ) && taxonomy_exists( $attribute_name ) ) {
+			$taxonomy = $attribute_name;
+		} elseif ( function_exists( 'wc_attribute_taxonomy_name' ) ) {
+			$taxonomy_name = wc_attribute_taxonomy_name( str_starts_with( $attribute_name, 'pa_' ) ? substr( $attribute_name, 3 ) : $attribute_name );
+			if ( taxonomy_exists( $taxonomy_name ) ) {
+				$taxonomy = $taxonomy_name;
+			}
+		}
+
+		$value = sanitize_text_field( (string) $value );
+		if ( '' === $taxonomy ) {
+			$normalized[ 'attribute_' . $attribute_name ] = $value;
+			continue;
+		}
+
+		$term = get_term_by( 'name', $value, $taxonomy );
+		if ( ! $term || is_wp_error( $term ) ) {
+			$term = get_term_by( 'slug', sanitize_title( $value ), $taxonomy );
+		}
+		$normalized[ 'attribute_' . $taxonomy ] = $term && ! is_wp_error( $term ) ? (string) $term->slug : sanitize_title( $value );
+	}
+
+	return $normalized;
+}
+
+/**
  * Query low-stock products through bounded native WooCommerce batches.
  *
  * @param array<string,mixed> $args Base WC product query arguments.
@@ -1049,13 +1096,9 @@ function mcp_wc_register_variation_create(): void {
 			$variation = new \WC_Product_Variation();
 			$variation->set_parent_id( $parent->get_id() );
 
-			$attrs = array();
-			if ( isset( $input['attributes'] ) && is_array( $input['attributes'] ) ) {
-				foreach ( $input['attributes'] as $slug => $value ) {
-					$slug = sanitize_title( $slug );
-					$attrs[ 'attribute_' . $slug ] = sanitize_text_field( $value );
-				}
-			}
+			$attrs = isset( $input['attributes'] ) && is_array( $input['attributes'] )
+				? mcp_wc_normalize_variation_attributes( $input['attributes'] )
+				: array();
 			$variation->set_attributes( $attrs );
 
 			if ( isset( $input['sku'] ) ) { $variation->set_sku( sanitize_text_field( $input['sku'] ) ); }
@@ -1207,6 +1250,11 @@ function mcp_wc_register_variation_delete(): void {
 // ─── Categories ──────────────────────────────────────────────────────────────
 
 function mcp_wc_format_term( \WP_Term $term ): array {
+	$permalink = get_term_link( $term );
+	if ( is_wp_error( $permalink ) || '' === $permalink ) {
+		$permalink = null;
+	}
+
 	return array(
 		'id'          => $term->term_id,
 		'name'        => $term->name,
@@ -1214,7 +1262,7 @@ function mcp_wc_format_term( \WP_Term $term ): array {
 		'description' => $term->description,
 		'count'       => (int) $term->count,
 		'parent_id'   => $term->parent ? (int) $term->parent : 0,
-		'permalink'   => get_term_link( $term ),
+		'permalink'   => $permalink,
 	);
 }
 
@@ -1245,7 +1293,7 @@ function mcp_wc_register_categories_query(): void {
 				'description' => array( 'type' => 'string' ),
 				'count'       => array( 'type' => 'integer' ),
 				'parent_id'   => array( 'type' => 'integer' ),
-				'permalink'   => array( 'type' => 'string', 'format' => 'uri' ),
+				'permalink'   => array( 'type' => array( 'string', 'null' ), 'format' => 'uri' ),
 			),
 			'additionalProperties' => false,
 		) ),
@@ -1324,7 +1372,7 @@ function mcp_wc_register_category_create(): void {
 					'description' => array( 'type' => 'string' ),
 					'count'       => array( 'type' => 'integer' ),
 					'parent_id'   => array( 'type' => 'integer' ),
-					'permalink'   => array( 'type' => 'string', 'format' => 'uri' ),
+					'permalink'   => array( 'type' => array( 'string', 'null' ), 'format' => 'uri' ),
 				), 'additionalProperties' => false ),
 			),
 			'additionalProperties' => false,
@@ -1385,7 +1433,7 @@ function mcp_wc_register_category_update(): void {
 					'description' => array( 'type' => 'string' ),
 					'count'       => array( 'type' => 'integer' ),
 					'parent_id'   => array( 'type' => 'integer' ),
-					'permalink'   => array( 'type' => 'string', 'format' => 'uri' ),
+					'permalink'   => array( 'type' => array( 'string', 'null' ), 'format' => 'uri' ),
 				), 'additionalProperties' => false ),
 			),
 			'additionalProperties' => false,
@@ -1490,7 +1538,7 @@ function mcp_wc_register_tags_query(): void {
 				'description' => array( 'type' => 'string' ),
 				'count'       => array( 'type' => 'integer' ),
 				'parent_id'   => array( 'type' => 'integer' ),
-				'permalink'   => array( 'type' => 'string', 'format' => 'uri' ),
+				'permalink'   => array( 'type' => array( 'string', 'null' ), 'format' => 'uri' ),
 			),
 			'additionalProperties' => false,
 		) ),
@@ -1567,7 +1615,7 @@ function mcp_wc_register_tag_create(): void {
 					'description' => array( 'type' => 'string' ),
 					'count'       => array( 'type' => 'integer' ),
 					'parent_id'   => array( 'type' => 'integer' ),
-					'permalink'   => array( 'type' => 'string', 'format' => 'uri' ),
+					'permalink'   => array( 'type' => array( 'string', 'null' ), 'format' => 'uri' ),
 				), 'additionalProperties' => false ),
 			),
 			'additionalProperties' => false,
@@ -1626,7 +1674,7 @@ function mcp_wc_register_tag_update(): void {
 					'description' => array( 'type' => 'string' ),
 					'count'       => array( 'type' => 'integer' ),
 					'parent_id'   => array( 'type' => 'integer' ),
-					'permalink'   => array( 'type' => 'string', 'format' => 'uri' ),
+					'permalink'   => array( 'type' => array( 'string', 'null' ), 'format' => 'uri' ),
 				), 'additionalProperties' => false ),
 			),
 			'additionalProperties' => false,
@@ -1801,6 +1849,35 @@ function mcp_wc_attribute_taxonomy_name( object $attribute ): string {
 	return '' === $slug ? '' : wc_attribute_taxonomy_name( $slug );
 }
 
+/**
+ * Resolve an attribute ID to its native WooCommerce taxonomy context.
+ *
+ * @return array{attribute:object,taxonomy:string}|array{}
+ */
+function mcp_wc_get_attribute_taxonomy_context( int $attribute_id ): array {
+	if ( $attribute_id < 1 || ! function_exists( 'wc_get_attribute' ) ) {
+		return array();
+	}
+
+	$attribute = wc_get_attribute( $attribute_id );
+	if ( ! is_object( $attribute ) ) {
+		return array();
+	}
+
+	return array(
+		'attribute' => $attribute,
+		'taxonomy' => mcp_wc_attribute_taxonomy_name( $attribute ),
+	);
+}
+
+/**
+ * Check the exact taxonomy capability for an attribute-term ability.
+ */
+function mcp_wc_can_manage_attribute_terms( array $input ): bool {
+	$context = mcp_wc_get_attribute_taxonomy_context( (int) ( $input['attribute_id'] ?? 0 ) );
+	return ! empty( $context['taxonomy'] ) && MCP_WC_Ability_Execution_Module::can_manage_taxonomy( $context['taxonomy'] );
+}
+
 function mcp_wc_register_attribute_terms_query(): void {
 	mcp_wc_register_ability( 'woocommerce/attribute-terms-query', array(
 		'label'               => 'Query attribute terms',
@@ -1829,17 +1906,16 @@ function mcp_wc_register_attribute_terms_query(): void {
 			'additionalProperties' => false,
 		) ),
 		'execute_callback'    => function ( array $input ) {
-			if ( ! current_user_can( 'manage_product_terms' ) ) {
-				return array( 'error' => 'Permission denied.' );
+			$context = mcp_wc_get_attribute_taxonomy_context( (int) $input['attribute_id'] );
+			if ( empty( $context ) ) {
+				return mcp_wc_error( 'mcp_wc_attribute_not_found', 'Attribute not found.' );
 			}
 
-			$attribute = wc_get_attribute( (int) $input['attribute_id'] );
-			if ( ! $attribute ) {
-				return array( 'error' => 'Attribute not found.' );
-			}
-
-			$taxonomy  = mcp_wc_attribute_taxonomy_name( $attribute );
+			$taxonomy = $context['taxonomy'];
 			if ( '' === $taxonomy ) { return mcp_wc_error( 'mcp_wc_attribute_taxonomy_missing', 'The attribute taxonomy could not be resolved.' ); }
+			if ( ! MCP_WC_Ability_Execution_Module::can_manage_taxonomy( $taxonomy ) ) {
+				return mcp_wc_error( 'mcp_wc_forbidden_term', 'You do not have permission to manage this attribute taxonomy.' );
+			}
 			$page      = (int) ( $input['page'] ?? 1 );
 			$per_page  = min( 100, max( 1, (int) ( $input['per_page'] ?? 25 ) ) );
 			$args = array(
@@ -1867,7 +1943,7 @@ function mcp_wc_register_attribute_terms_query(): void {
 				);
 			}
 
-			$total = wp_count_terms( array( 'taxonomy' => $taxonomy, 'hide_empty' => false ) );
+			$total = wp_count_terms( array( 'taxonomy' => $taxonomy, 'hide_empty' => false, 'search' => $args['search'] ?? '' ) );
 			if ( is_wp_error( $total ) ) { $total = 0; }
 
 			return array(
@@ -1877,9 +1953,7 @@ function mcp_wc_register_attribute_terms_query(): void {
 				'per_page'    => $per_page,
 			);
 		},
-		'permission_callback' => function (): bool {
-			return current_user_can( 'manage_product_terms' );
-		},
+		'permission_callback' => 'mcp_wc_can_manage_attribute_terms',
 		'meta'                => array(
 			'annotations' => array( 'readonly' => true, 'destructive' => false, 'idempotent' => true ),
 		),
@@ -1912,15 +1986,13 @@ function mcp_wc_register_attribute_term_create(): void {
 			'additionalProperties' => false,
 		),
 		'execute_callback'    => function ( array $input ) {
-			if ( ! current_user_can( 'manage_product_terms' ) ) {
-				return array( 'error' => 'Permission denied.' );
-			}
-
-			$attribute = wc_get_attribute( (int) $input['attribute_id'] );
-			if ( ! $attribute ) { return array( 'error' => 'Attribute not found.' ); }
-
-			$taxonomy = mcp_wc_attribute_taxonomy_name( $attribute );
+			$context = mcp_wc_get_attribute_taxonomy_context( (int) $input['attribute_id'] );
+			if ( empty( $context ) ) { return mcp_wc_error( 'mcp_wc_attribute_not_found', 'Attribute not found.' ); }
+			$taxonomy = $context['taxonomy'];
 			if ( '' === $taxonomy ) { return mcp_wc_error( 'mcp_wc_attribute_taxonomy_missing', 'The attribute taxonomy could not be resolved.' ); }
+			if ( ! MCP_WC_Ability_Execution_Module::can_manage_taxonomy( $taxonomy ) ) {
+				return mcp_wc_error( 'mcp_wc_forbidden_term', 'You do not have permission to manage this attribute taxonomy.' );
+			}
 			$args = array(
 				'name'        => sanitize_text_field( $input['name'] ),
 				'slug'        => isset( $input['slug'] ) ? sanitize_title( $input['slug'] ) : '',
@@ -1933,7 +2005,7 @@ function mcp_wc_register_attribute_term_create(): void {
 			$term = get_term( $result['term_id'], $taxonomy );
 			return array( 'term' => array( 'id' => $term->term_id, 'name' => $term->name, 'slug' => $term->slug, 'description' => $term->description, 'count' => (int) $term->count ) );
 		},
-		'permission_callback' => function (): bool { return current_user_can( 'manage_product_terms' ); },
+		'permission_callback' => 'mcp_wc_can_manage_attribute_terms',
 		'meta'                => array( 'annotations' => array( 'readonly' => false, 'destructive' => false, 'idempotent' => false ) ),
 	) );
 }
@@ -1965,13 +2037,9 @@ function mcp_wc_register_attribute_term_update(): void {
 			'additionalProperties' => false,
 		),
 		'execute_callback'    => function ( array $input ) {
-			if ( ! current_user_can( 'manage_product_terms' ) ) {
-				return array( 'error' => 'Permission denied.' );
-			}
-
-			$attribute = wc_get_attribute( (int) $input['attribute_id'] );
-			if ( ! $attribute ) { return mcp_wc_error( 'mcp_wc_attribute_not_found', 'Attribute not found.' ); }
-			$taxonomy = mcp_wc_attribute_taxonomy_name( $attribute );
+			$context = mcp_wc_get_attribute_taxonomy_context( (int) $input['attribute_id'] );
+			if ( empty( $context ) ) { return mcp_wc_error( 'mcp_wc_attribute_not_found', 'Attribute not found.' ); }
+			$taxonomy = $context['taxonomy'];
 			if ( '' === $taxonomy ) { return mcp_wc_error( 'mcp_wc_attribute_taxonomy_missing', 'The attribute taxonomy could not be resolved.' ); }
 			if ( ! MCP_WC_Ability_Execution_Module::can_manage_taxonomy( $taxonomy ) ) {
 				return mcp_wc_error( 'mcp_wc_forbidden_term', 'You do not have permission to manage this attribute taxonomy.' );
@@ -1991,7 +2059,7 @@ function mcp_wc_register_attribute_term_update(): void {
 			$term = get_term( $id, $taxonomy );
 			return array( 'term' => array( 'id' => $term->term_id, 'name' => $term->name, 'slug' => $term->slug, 'description' => $term->description, 'count' => (int) $term->count ) );
 		},
-		'permission_callback' => function (): bool { return current_user_can( 'manage_product_terms' ); },
+		'permission_callback' => 'mcp_wc_can_manage_attribute_terms',
 		'meta'                => array( 'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => false ) ),
 	) );
 }
@@ -2020,15 +2088,11 @@ function mcp_wc_register_attribute_term_delete(): void {
 			'additionalProperties' => false,
 		),
 		'execute_callback'    => function ( array $input ) {
-			if ( ! current_user_can( 'manage_product_terms' ) ) {
-				return array( 'error' => 'Permission denied.' );
-			}
-
 			$confirmation = MCP_WC_Ability_Execution_Module::require_confirmation( $input, 'woocommerce-mcp/attribute-term-delete' );
 			if ( $confirmation ) { return $confirmation; }
-			$attribute = wc_get_attribute( (int) $input['attribute_id'] );
-			if ( ! $attribute ) { return mcp_wc_error( 'mcp_wc_attribute_not_found', 'Attribute not found.' ); }
-			$taxonomy = mcp_wc_attribute_taxonomy_name( $attribute );
+			$context = mcp_wc_get_attribute_taxonomy_context( (int) $input['attribute_id'] );
+			if ( empty( $context ) ) { return mcp_wc_error( 'mcp_wc_attribute_not_found', 'Attribute not found.' ); }
+			$taxonomy = $context['taxonomy'];
 			if ( '' === $taxonomy ) { return mcp_wc_error( 'mcp_wc_attribute_taxonomy_missing', 'The attribute taxonomy could not be resolved.' ); }
 			if ( ! MCP_WC_Ability_Execution_Module::can_manage_taxonomy( $taxonomy ) ) {
 				return mcp_wc_error( 'mcp_wc_forbidden_term', 'You do not have permission to manage this attribute taxonomy.' );
@@ -2040,7 +2104,7 @@ function mcp_wc_register_attribute_term_delete(): void {
 			$result = wp_delete_term( $id, $taxonomy );
 			return array( 'deleted' => ! is_wp_error( $result ) && true === $result, 'id' => $id );
 		},
-		'permission_callback' => function (): bool { return current_user_can( 'manage_product_terms' ); },
+		'permission_callback' => 'mcp_wc_can_manage_attribute_terms',
 		'meta'                => array( 'annotations' => array( 'readonly' => false, 'destructive' => true, 'idempotent' => true ) ),
 	) );
 }

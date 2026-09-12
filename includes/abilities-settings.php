@@ -979,16 +979,26 @@ function mcp_wc_register_system_tools_query(): void {
 
 			$controller = new \WC_REST_System_Status_Tools_Controller();
 			$tools_data = $controller->get_items( new \WP_REST_Request() );
+			$tools_data = mcp_wc_unwrap_rest_result( $tools_data );
+			if ( is_wp_error( $tools_data ) ) {
+				return $tools_data;
+			}
+			if ( ! is_array( $tools_data ) ) {
+				return mcp_wc_error( 'mcp_wc_system_tools_unavailable', 'WooCommerce system tools are unavailable.' );
+			}
 			$tools      = array();
 
 			$allowed = mcp_wc_allowed_system_tools();
-			foreach ( $tools_data->get_data() as $tool ) {
+			foreach ( $tools_data as $tool ) {
+				if ( ! is_array( $tool ) || ! isset( $tool['id'] ) ) {
+					continue;
+				}
 				if ( ! in_array( sanitize_key( $tool['id'] ), $allowed, true ) ) { continue; }
 				$tools[] = array(
-					'id'          => $tool['id'],
-					'name'        => $tool['name'],
-					'description' => $tool['description'],
-					'action'      => $tool['action'],
+					'id'          => (string) $tool['id'],
+					'name'        => (string) ( $tool['name'] ?? '' ),
+					'description' => (string) ( $tool['description'] ?? '' ),
+					'action'      => (string) ( $tool['action'] ?? '' ),
 				);
 			}
 
@@ -1051,7 +1061,13 @@ function mcp_wc_register_system_tool_run(): void {
 				return array( 'success' => false, 'message' => $response->get_error_message() );
 			}
 
-			$data = $response->get_data();
+			$data = mcp_wc_unwrap_rest_result( $response );
+			if ( is_wp_error( $data ) ) {
+				return $data;
+			}
+			if ( ! is_array( $data ) ) {
+				return mcp_wc_error( 'mcp_wc_system_tool_unavailable', 'The system tool returned an invalid response.' );
+			}
 			return array(
 				'success' => ! empty( $data['success'] ),
 				'message' => $data['message'] ?? '',

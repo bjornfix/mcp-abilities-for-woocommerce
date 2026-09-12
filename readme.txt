@@ -5,7 +5,7 @@ Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 8.0
 Requires Plugins: woocommerce
-Stable tag: 0.2.13
+Stable tag: 0.2.14
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -58,6 +58,12 @@ System tools are disabled by default. Explicitly allow only required tool IDs th
 
 == Changelog ==
 
+= 0.2.14 =
+
+* Fixed variation attribute storage for global taxonomies and RFC3339 date output across WooCommerce abilities.
+* Fixed attribute-term pagination, taxonomy-specific permissions, system-tool response handling, invalid order-date filters, and tax-rate mutation postconditions.
+* Corrected sold-individually product output and nullable term permalink contracts.
+
 = 0.2.13 =
 
 * Fixed low-stock product filtering, order creation-date filtering, attribute taxonomy handling, webhook listing, shipping-zone lookup, and optional email output normalization.
@@ -82,6 +88,10 @@ System tools are disabled by default. Explicitly allow only required tool IDs th
 * Previous public baseline.
 
 == Upgrade Notice ==
+
+= 0.2.14 =
+
+Improves variation attributes, date output, taxonomy permissions, system-tool compatibility, order validation, and tax-rate mutation reporting.
 
 = 0.2.13 =
 

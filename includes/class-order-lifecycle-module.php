@@ -67,7 +67,7 @@ final class MCP_WC_Order_Lifecycle_Module {
 			if ( $order instanceof WC_Order && $order->get_id() > 0 ) {
 				try { $order->delete( true ); } catch ( Throwable $cleanup_error ) { /* Cleanup is best-effort; keep the public failure generic. */ }
 			}
-			return mcp_wc_error( 'mcp_wc_order_create_failed', 'The Order could not be created; no partial Order was retained.' );
+			return mcp_wc_error( 'mcp_wc_order_create_failed', 'Order creation failed. Check the order list before trying again.' );
 		}
 	}
 
@@ -183,6 +183,9 @@ final class MCP_WC_Order_Lifecycle_Module {
 		$existing_items = $order->get_items( array( 'line_item', 'fee', 'shipping' ) );
 		foreach ( $requested_lines as $item ) {
 			$item_id = (int) ( $item['id'] ?? 0 );
+			if ( isset( $args['line_items'][ $item_id ] ) ) {
+				return mcp_wc_error( 'mcp_wc_duplicate_refund_item', 'Each Order line item may appear only once in a refund request.' );
+			}
 			if ( ! isset( $existing_items[ $item_id ] ) ) {
 				return mcp_wc_error( 'mcp_wc_refund_item_not_found', 'A refund line item does not belong to this Order.' );
 			}

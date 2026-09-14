@@ -1,31 +1,36 @@
 # MCP Abilities for WooCommerce
 
-[![Latest release](https://img.shields.io/github/v/release/bjornfix/mcp-abilities-for-woocommerce?sort=semver)](https://github.com/bjornfix/mcp-abilities-for-woocommerce/releases)
+[![Release](https://img.shields.io/badge/release-0.2.15-blue)](https://downloads.devenia.com/mcp-abilities-for-woocommerce.zip)
 [![License](https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 [![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-21759b.svg)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-777bb4.svg)](https://www.php.net/)
 
-Secure, structured WooCommerce management for MCP clients through the WordPress Abilities API.
+Put an AI assistant to work on your WooCommerce catalogue, orders and shop settings. Find the right product variant, prepare a stock correction, inspect an order or create a coupon through named operations that use WooCommerce data.
 
-**Stable version:** 0.2.14<br>
+**Stable version:** 0.2.15<br>
 **Tested with WordPress:** 7.1<br>
 **License:** GPL-2.0-or-later<br>
 **Tags:** woocommerce, mcp, abilities, ai, automation
 
-Version 0.2.14 exposes 79 canonical abilities under `woocommerce-mcp/*`. They cover products, orders, customers, coupons, reviews, reports, store configuration, tax, shipping, payment gateways, webhooks, and operational diagnostics.
+Version 0.2.15 exposes 79 canonical abilities under `woocommerce-mcp/*`. They cover products, orders, customers, coupons, reviews, reports, store configuration, tax, shipping, payment gateways, webhooks, and operational diagnostics.
 
 ## What It Does
 
-The plugin turns WooCommerce's management surface into typed, discoverable abilities for compatible MCP clients. An authorized operator can search a catalogue, create or update commercial records, inspect operations, and administer core store infrastructure without relying on fragile screen automation.
+An assistant can help a shop team finish routine work: find products running low, update selected prices, investigate an order, prepare a promotion, or check shipping and payment settings. Developers can combine these operations in their existing MCP client. The plugin supplies the WooCommerce operations; your client supplies the conversation and decides which operation to request.
 
 The abilities use WooCommerce CRUD and query APIs, apply object-level authorization, validate input and output contracts, and return normalized errors that an MCP client can act on reliably.
 
 ## The Real Workflow
 
+Suppose a mug comes in three colours and each variant manages its own stock. Ask the assistant to find the parent product, list its variants and identify the blue mug by SKU. It can read the current quantity, apply your selected correction and read it back. You can keep the red and cream mugs separate throughout the task.
+
+For a refund, first inspect the order and its remaining refundable lines. Choose whether you need a refund record only or an actual payment refund through a supported gateway. The record-only mode is the default.
+
+
 1. An MCP client discovers the `woocommerce-mcp/*` abilities and their JSON schemas.
 2. The client selects the narrow ability that matches the task.
 3. WordPress checks the current user's capability against the exact target object where applicable.
-4. High-impact operations require the exact confirmation token declared by that ability.
+4. Operations whose schemas declare a confirmation field require that exact token.
 5. WooCommerce performs the operation through its native data APIs.
 6. The ability returns a bounded, structured result or a machine-readable `WP_Error`.
 
@@ -34,7 +39,7 @@ The abilities use WooCommerce CRUD and query APIs, apply object-level authorizat
 - One canonical namespace makes tool discovery predictable.
 - Exact schemas replace loosely structured requests.
 - Native WooCommerce authorization protects the actual product, order, customer, review, or taxonomy target.
-- Confirmation contracts make externally visible and destructive actions explicit.
+- Confirmation fields make the effects of selected writes explicit in the request.
 - Bounded collections and resumable reports remain usable on larger stores.
 - High-Performance Order Storage is supported because order work uses WooCommerce APIs rather than direct post-table queries.
 - Legacy `woocommerce/*` names remain available only when no other plugin owns them, preventing silent name collisions.
@@ -45,7 +50,7 @@ The abilities use WooCommerce CRUD and query APIs, apply object-level authorizat
 |---|---|
 | Client-specific, undocumented store calls | Discoverable abilities with input and output schemas |
 | Broad role checks for sensitive mutations | Native authorization against the exact object |
-| Destructive calls can look like ordinary writes | Exact confirmation tokens for high-impact operations |
+| A write has no visible review step | Named confirmation tokens on operations that declare them |
 | Large queries can run without a clear bound | Pagination, hard limits, scan caps, and resumable report cursors |
 | Integration failures leak inconsistent result shapes | Normalized `WP_Error` failures before output validation |
 | Direct order table assumptions | WooCommerce CRUD/query APIs compatible with HPOS |
@@ -206,16 +211,16 @@ The abilities use WooCommerce CRUD and query APIs, apply object-level authorizat
 {
   "ability": "woocommerce-mcp/product-create",
   "input": {
-    "name": "Replacement hydraulic valve",
-    "type": "simple",
-    "regular_price": "249.00",
+    "name": "Blue ceramic mug",
+    "product_type_alias": "physical",
+    "regular_price": "18.00",
     "status": "draft",
     "confirm_dangerous_action": "woocommerce-mcp/product-create"
   }
 }
 ```
 
-### Create a partial refund
+### Record a partial refund
 
 ```json
 {
@@ -228,6 +233,8 @@ The abilities use WooCommerce CRUD and query APIs, apply object-level authorizat
   }
 }
 ```
+
+This example creates a WooCommerce refund record. It does not send money through the payment gateway. Set `refund_payment` to `true` only when you intend a payment refund and the order's gateway supports it. Refund line IDs must be unique. If you omit `amount` with selected lines, the plugin calculates their refund including tax; without lines, it uses the remaining refundable amount.
 
 ### Continue a bounded sales report
 
@@ -243,13 +250,13 @@ The abilities use WooCommerce CRUD and query APIs, apply object-level authorizat
 }
 ```
 
-When `has_more` is `true`, pass `next_cursor_page` as the next request's `cursor_page`.
+When `has_more` is `true`, pass `next_cursor_page` as the next request's `cursor_page`. Keep the dates, currency and `max_orders` unchanged while continuing. Each response summarises only its scanned window; a product ranking or sales total from one window is not a complete shop report. Combine all windows if you need totals for the full period.
 
 ## Safety and Ownership Boundaries
 
 - WordPress authentication and WooCommerce capabilities remain the authorization source of truth.
 - Product, order, customer, review, and taxonomy mutations use exact-object or native WooCommerce permission checks where applicable.
-- Externally visible and destructive operations require the exact `confirm_dangerous_action` token declared in their input schema.
+- Operations that declare `confirm_dangerous_action` require the exact token in their input schema. Not every write has this field. Clients must review the target and effect before any write; a token alone does not prove human approval.
 - Persistent outbound URLs for webhooks, external products, and downloads must use public HTTPS hosts. Private, reserved, loopback, unresolved, and mixed public/private destinations are rejected.
 - Webhook secrets are accepted when required but never returned by read abilities.
 - Product metadata is limited to public keys by default. Protected keys require the `mcp_wc_allowed_protected_product_meta_keys` filter.
@@ -273,17 +280,15 @@ When `has_more` is `true`, pass `next_cursor_page` as the next request's `cursor
 wp plugin install mcp-abilities-for-woocommerce.zip --activate
 ```
 
-## Development and Verification
-
-```bash
-find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
-php tests/run-contract.php
-git diff --check
-```
-
-Release candidates must also pass WordPress Plugin Check on a development WordPress site with WooCommerce and the Abilities API active.
-
 ## Recent Changes
+
+### 0.2.15
+
+- Fixed confirmation field schemas for product creation and updates, and aligned product creation permissions with WooCommerce.
+- Included variations in product output types and returned whole-line decimal amounts for orders and refunds.
+- Rejected duplicate refund lines and fixed report scan limits and continuation without skipped matches.
+- Used native WooCommerce validation for shipping and payment settings, with saved enabled-state checks.
+- Loaded the native customer-deletion function when needed and clarified failure and refund guidance.
 
 ### 0.2.14
 
@@ -319,7 +324,7 @@ See [all releases](https://github.com/bjornfix/mcp-abilities-for-woocommerce/rel
 
 ## Contributing
 
-Issues and focused pull requests are welcome. Include a reproducible case, preserve backward compatibility where practical, and add contract coverage for changes to schemas, permissions, confirmation rules, or output shapes. Every release must pass PHP lint, the executable contract suite, WordPress Plugin Check, and a development-site runtime check.
+Issues and focused pull requests are welcome. Include a reproducible case, preserve backward compatibility where practical, and add contract coverage for changes to schemas, permissions, confirmation rules, or output shapes. Include a focused test that shows the reported behaviour and the correction.
 
 ## License
 

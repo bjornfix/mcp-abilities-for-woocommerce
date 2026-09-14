@@ -5,11 +5,11 @@ Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 8.0
 Requires Plugins: woocommerce
-Stable tag: 0.2.14
+Stable tag: 0.2.15
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Secure, structured WooCommerce management abilities for MCP clients through the WordPress Abilities API.
+Let an MCP-compatible AI assistant manage WooCommerce products, orders, stock and shop settings through the WordPress Abilities API.
 
 == Description ==
 
@@ -24,7 +24,7 @@ Coverage includes:
 * Store settings, tax rates/classes, shipping zones/methods/classes, and payment gateways
 * Webhooks, email settings, system status, and explicitly allowlisted system tools
 
-The plugin uses WooCommerce CRUD/query APIs, supports High-Performance Order Storage, performs object-specific authorization, normalizes failures before schema validation, requires explicit confirmation for high-impact operations, and bounds collection/report workloads.
+The plugin uses WooCommerce CRUD/query APIs, supports High-Performance Order Storage, performs object-specific authorization, normalizes failures before schema validation, requires exact confirmation tokens for operations that declare them, and bounds collection/report workloads.
 
 Persistent outbound URLs must use public HTTPS hosts. Webhook secrets are never returned. Protected product metadata and system tools are denied unless explicitly allowlisted with WordPress filters.
 
@@ -46,7 +46,7 @@ Yes. Order reads and reports use WooCommerce order APIs rather than direct post-
 
 = Why do some writes require confirm_dangerous_action? =
 
-Externally visible or destructive operations require the exact token declared by that ability. This prevents an MCP client from turning an unreviewed intent into a live mutation.
+Operations with this field require the exact token declared by their schema. Other writes do not all require a token. Your client must review each target and effect; the token does not establish human approval.
 
 = Can the plugin expose protected product metadata? =
 
@@ -57,6 +57,14 @@ Not by default. Add only specific approved keys through the `mcp_wc_allowed_prot
 System tools are disabled by default. Explicitly allow only required tool IDs through the `mcp_wc_allowed_system_tools` filter.
 
 == Changelog ==
+
+= 0.2.15 =
+
+* Fixed product confirmation schemas, native create permissions and variation output types.
+* Returned whole-line decimal amounts for order and refund lines.
+* Rejected repeated refund line IDs and fixed bounded report continuation.
+* Used native validation for shipping and payment settings and verified stored enabled states.
+* Fixed loading of the native customer deletion function and clarified refund and failure guidance.
 
 = 0.2.14 =
 

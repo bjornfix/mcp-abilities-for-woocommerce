@@ -369,7 +369,7 @@ function mcp_wc_format_refund( \WC_Order_Refund $refund ): array {
 			'name'         => $item->get_name(),
 			'product_id'   => $item->get_product_id(),
 			'quantity'     => $item->get_quantity(),
-			'refund_total' => $refund->get_item_total( $item, false, false ),
+			'refund_total' => wc_format_decimal( abs( (float) $item->get_total() ) ),
 		);
 	}
 
@@ -465,13 +465,13 @@ function mcp_wc_register_order_refund_create(): void {
 			'type'                 => 'object',
 			'properties'           => array(
 				'order_id' => array( 'type' => 'integer', 'minimum' => 1 ),
-				'amount'   => array( 'type' => 'string', 'description' => 'Refund amount. If omitted, refunds all line items fully.' ),
+				'amount'   => array( 'type' => 'string', 'description' => 'Refund amount. If omitted, totals the selected lines and their calculated tax; without selected lines, uses the remaining refundable order amount.' ),
 				'reason'   => array( 'type' => 'string', 'description' => 'Reason for the refund.' ),
 				'line_items' => array( 'type' => 'array', 'maxItems' => 100, 'items' => array(
 					'type'       => 'object',
 					'properties' => array(
-						'id'       => array( 'type' => 'integer', 'description' => 'Order line item ID.' ),
-						'quantity' => array( 'type' => 'integer', 'minimum' => 1, 'default' => 1 ),
+						'id'       => array( 'type' => 'integer', 'minimum' => 1, 'description' => 'Order line item ID. Each ID may appear only once.' ),
+						'quantity' => array( 'type' => 'integer', 'minimum' => 1, 'description' => 'Quantity to refund. Defaults to the remaining refundable quantity for this line.' ),
 						'total'    => array( 'type' => 'string', 'description' => 'Amount to refund for this item.' ),
 					),
 					'required'   => array( 'id' ),

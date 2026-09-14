@@ -21,6 +21,8 @@ function mcp_wc_report_orders( array $input, bool $with_dates = true ): array {
 	$max = min( 5000, max( 1, (int) ( $input['max_orders'] ?? 1000 ) ) );
 	$page = max( 1, (int) ( $input['cursor_page'] ?? 1 ) );
 	$batch_size = min( 100, $max );
+	// Complete native pages keep the page cursor stable across requests.
+	$max_pages = max( 1, intdiv( $max, $batch_size ) );
 	$args = array( 'status' => array( 'completed', 'processing', 'on-hold', 'refunded' ), 'type' => 'shop_order', 'limit' => $batch_size, 'page' => $page, 'paginate' => true, 'orderby' => 'date', 'order' => 'ASC' );
 	if ( $with_dates ) {
 		$after  = ! empty( $input['date_after'] ) ? strtotime( sanitize_text_field( $input['date_after'] ) ) : strtotime( gmdate( 'Y-m-01\T00:00:00\Z' ) );
@@ -29,18 +31,17 @@ function mcp_wc_report_orders( array $input, bool $with_dates = true ): array {
 	}
 	$currency = strtoupper( sanitize_text_field( (string) ( $input['currency'] ?? mcp_wc_get_currency() ) ) );
 	$orders = array(); $has_more = false; $scanned = 0;
-	while ( count( $orders ) < $max ) {
+	for ( $pages_read = 0; $pages_read < $max_pages; ++$pages_read ) {
 		$args['page'] = $page;
 		$result = wc_get_orders( $args );
 		$scanned += count( $result->orders );
 		foreach ( $result->orders as $order ) {
 			if ( $order instanceof WC_Order && $order->get_currency() === $currency ) {
 				$orders[] = $order;
-				if ( count( $orders ) >= $max ) { break; }
 			}
 		}
 		$has_more = $page < (int) $result->max_num_pages;
-		if ( ! $has_more || count( $orders ) >= $max ) { break; }
+		if ( ! $has_more || $pages_read + 1 >= $max_pages ) { break; }
 		++$page;
 	}
 	return array( 'orders' => $orders, 'has_more' => $has_more, 'scanned' => $scanned, 'next_cursor_page' => $has_more ? $page + 1 : null );

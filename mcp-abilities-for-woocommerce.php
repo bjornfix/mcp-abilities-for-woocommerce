@@ -3,7 +3,7 @@
  * Plugin Name: MCP Abilities for WooCommerce
  * Plugin URI: https://devenia.com/plugins/mcp-abilities-for-woocommerce/
  * Description: Comprehensive WooCommerce abilities for MCP. Products, orders, coupons, customers, reports, settings, reviews, shipping, tax, and webhooks.
- * Version: 0.2.14
+ * Version: 0.2.15
  * Author: basicus
  * Author URI: https://profiles.wordpress.org/basicus/
  * License: GPL-2.0+
@@ -106,15 +106,15 @@ function mcp_wc_all_order_statuses(): array {
 }
 
 /**
- * WC product types — derived from WC's registered product types.
+ * Product output types, including variations omitted from the product editor selector.
  *
  * @return array<int,string>
  */
 function mcp_wc_product_types(): array {
 	if ( ! function_exists( 'wc_get_product_types' ) ) {
-		return array( 'simple', 'grouped', 'external', 'variable' );
+		return array( 'simple', 'grouped', 'external', 'variable', 'variation' );
 	}
-	return array_keys( wc_get_product_types() );
+	return array_values( array_unique( array_merge( array_keys( wc_get_product_types() ), array( 'variation' ) ) ) );
 }
 
 /**
@@ -255,8 +255,8 @@ function mcp_wc_format_order_line_items( \WC_Order $order ): array {
 			'product_id'   => $item->get_product_id(),
 			'variation_id' => $item->get_variation_id(),
 			'quantity'     => $item->get_quantity(),
-			'subtotal'     => $order->get_item_subtotal( $item ),
-			'total'        => $order->get_item_total( $item ),
+			'subtotal'     => (string) $item->get_subtotal(),
+			'total'        => (string) $item->get_total(),
 		);
 	}
 	return $items;

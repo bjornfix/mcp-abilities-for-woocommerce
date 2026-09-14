@@ -258,7 +258,7 @@ function mcp_wc_register_customer_create(): void {
 			} catch ( \Throwable $throwable ) {
 				require_once ABSPATH . 'wp-admin/includes/user.php';
 				wp_delete_user( (int) $user_id );
-				return mcp_wc_error( 'mcp_wc_customer_create_failed', 'The customer could not be created; the partial account was removed.' );
+				return mcp_wc_error( 'mcp_wc_customer_create_failed', 'Customer creation failed. Check the customer list before trying again.' );
 			}
 
 			$user = get_userdata( $user_id );
@@ -438,6 +438,7 @@ function mcp_wc_register_customer_delete(): void {
 
 			$reassign = isset( $input['reassign_to'] ) ? (int) $input['reassign_to'] : null;
 			if ( null !== $reassign && ( $reassign === $user_id || ! get_userdata( $reassign ) ) ) { return mcp_wc_error( 'mcp_wc_invalid_reassignment', 'The reassignment target must be a different existing user.' ); }
+			require_once ABSPATH . 'wp-admin/includes/user.php';
 			$result   = wp_delete_user( $user_id, $reassign );
 
 			return array(

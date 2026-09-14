@@ -177,17 +177,20 @@ final class MCP_WC_Commerce_Administration_Module {
 		if ( $guard ) { return $guard; }
 		$method = \WC_Shipping_Zones::get_shipping_method( (int) ( $input['instance_id'] ?? 0 ) );
 		if ( ! $method ) { return mcp_wc_error( 'mcp_wc_shipping_method_not_found', 'Shipping method instance not found.' ); }
-		$fields   = $method->get_instance_form_fields();
-		$settings = get_option( $method->get_instance_option_key(), array() );
-		$settings = is_array( $settings ) ? $settings : array();
-		foreach ( (array) ( $input['settings'] ?? array() ) as $key => $value ) {
-			$key = sanitize_key( (string) $key );
-			if ( ! array_key_exists( $key, $fields ) || is_array( $value ) || is_object( $value ) ) { continue; }
-			$settings[ $key ] = sanitize_text_field( (string) $value );
+		$zone = \WC_Shipping_Zones::get_zone_by( 'instance_id', (int) $method->get_instance_id() );
+		if ( ! $zone ) { return mcp_wc_error( 'mcp_wc_shipping_zone_not_found', 'Shipping zone not found.' ); }
+		$request = new \WP_REST_Request( 'PUT' );
+		$params = array( 'zone_id' => (int) $zone->get_id(), 'instance_id' => (int) $method->get_instance_id() );
+		foreach ( array( 'settings', 'enabled' ) as $field ) {
+			if ( array_key_exists( $field, $input ) ) { $params[ $field ] = $input[ $field ]; }
 		}
-		if ( isset( $input['enabled'] ) ) { $settings['enabled'] = $input['enabled'] ? 'yes' : 'no'; }
-		update_option( $method->get_instance_option_key(), $settings );
-		$method->init_instance_settings();
+		$request->set_params( $params );
+		$result = ( new \WC_REST_Shipping_Zone_Methods_Controller() )->update_item( $request );
+		if ( is_wp_error( $result ) ) { return $result; }
+		$stored = \WC_Shipping_Zones::get_shipping_method( (int) $method->get_instance_id() );
+		if ( ! $stored || ( isset( $input['enabled'] ) && ( 'yes' === $stored->enabled ) !== $input['enabled'] ) ) {
+			return mcp_wc_error( 'mcp_wc_shipping_method_update_failed', 'The shipping method enabled state could not be confirmed.' );
+		}
 		return array( 'updated' => true, 'instance_id' => (int) $method->get_instance_id() );
 	}
 
@@ -208,17 +211,18 @@ final class MCP_WC_Commerce_Administration_Module {
 		if ( $guard ) { return $guard; }
 		$gateway = WC()->payment_gateways()->payment_gateways()[ sanitize_key( (string) ( $input['id'] ?? '' ) ) ] ?? null;
 		if ( ! $gateway ) { return mcp_wc_error( 'mcp_wc_payment_gateway_not_found', 'Payment gateway not found.' ); }
-		$fields   = is_array( $gateway->form_fields ) ? $gateway->form_fields : array();
-		$settings = get_option( $gateway->get_option_key(), array() );
-		$settings = is_array( $settings ) ? $settings : array();
-		foreach ( (array) ( $input['settings'] ?? array() ) as $key => $value ) {
-			$key = sanitize_key( (string) $key );
-			if ( ! array_key_exists( $key, $fields ) || is_array( $value ) || is_object( $value ) ) { continue; }
-			$settings[ $key ] = sanitize_text_field( (string) $value );
+		$request = new \WP_REST_Request( 'PUT' );
+		$params = array( 'id' => (string) $gateway->id );
+		foreach ( array( 'settings', 'enabled' ) as $field ) {
+			if ( array_key_exists( $field, $input ) ) { $params[ $field ] = $input[ $field ]; }
 		}
-		if ( isset( $input['enabled'] ) ) { $settings['enabled'] = $input['enabled'] ? 'yes' : 'no'; }
-		update_option( $gateway->get_option_key(), $settings );
-		$gateway->init_settings();
+		$request->set_params( $params );
+		$result = ( new \WC_REST_Payment_Gateways_Controller() )->update_item( $request );
+		if ( is_wp_error( $result ) ) { return $result; }
+		$settings = get_option( $gateway->get_option_key(), array() );
+		if ( isset( $input['enabled'] ) && ( 'yes' === ( $settings['enabled'] ?? 'no' ) ) !== $input['enabled'] ) {
+			return mcp_wc_error( 'mcp_wc_payment_gateway_update_failed', 'The payment gateway enabled state could not be confirmed.' );
+		}
 		return array( 'updated' => true, 'id' => (string) $gateway->id, 'enabled' => 'yes' === ( $settings['enabled'] ?? 'no' ) );
 	}
 

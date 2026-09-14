@@ -427,8 +427,8 @@ function mcp_wc_register_product_create(): void {
 					),
 					'additionalProperties' => false,
 				) ),
-			),
 				'confirm_dangerous_action' => MCP_WC_Ability_Execution_Module::confirmation_schema( 'woocommerce-mcp/product-create' ),
+			),
 			'required'             => array( 'name', 'confirm_dangerous_action' ),
 			'additionalProperties' => false,
 		),
@@ -444,7 +444,7 @@ function mcp_wc_register_product_create(): void {
 			try {
 			$confirmation = MCP_WC_Ability_Execution_Module::require_confirmation( $input, 'woocommerce-mcp/product-create' );
 			if ( $confirmation ) { return $confirmation; }
-			if ( ! current_user_can( 'edit_products' ) ) {
+			if ( ! wc_rest_check_post_permissions( 'product', 'create' ) ) {
 				return array( 'error' => 'You do not have permission to create products.' );
 			}
 
@@ -641,7 +641,7 @@ function mcp_wc_register_product_create(): void {
 			}
 		},
 		'permission_callback' => function (): bool {
-			return current_user_can( 'edit_products' );
+			return wc_rest_check_post_permissions( 'product', 'create' );
 		},
 		'meta'                => array(
 			'annotations' => array(
@@ -730,8 +730,8 @@ function mcp_wc_register_product_update(): void {
 					),
 					'additionalProperties' => false,
 				) ),
-			),
 				'confirm_dangerous_action' => MCP_WC_Ability_Execution_Module::confirmation_schema( 'woocommerce-mcp/product-update' ),
+			),
 			'required'             => array( 'id', 'confirm_dangerous_action' ),
 			'additionalProperties' => false,
 		),

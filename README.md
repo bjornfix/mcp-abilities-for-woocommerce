@@ -1,18 +1,18 @@
 # MCP Abilities for WooCommerce
 
-[![Release](https://img.shields.io/badge/release-0.2.15-blue)](https://downloads.devenia.com/mcp-abilities-for-woocommerce.zip)
+[![Release](https://img.shields.io/badge/release-0.2.16-blue)](https://downloads.devenia.com/mcp-abilities-for-woocommerce.zip)
 [![License](https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 [![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-21759b.svg)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-777bb4.svg)](https://www.php.net/)
 
 Put an AI assistant to work on your WooCommerce catalogue, orders and shop settings. Find the right product variant, prepare a stock correction, inspect an order or create a coupon through named operations that use WooCommerce data.
 
-**Stable version:** 0.2.15<br>
+**Stable version:** 0.2.16<br>
 **Tested with WordPress:** 7.1<br>
 **License:** GPL-2.0-or-later<br>
 **Tags:** woocommerce, mcp, abilities, ai, automation
 
-Version 0.2.15 exposes 79 canonical abilities under `woocommerce-mcp/*`. They cover products, orders, customers, coupons, reviews, reports, store configuration, tax, shipping, payment gateways, webhooks, and operational diagnostics.
+Version 0.2.16 exposes 79 canonical abilities under `woocommerce-mcp/*`. They cover products, orders, customers, coupons, reviews, reports, store configuration, tax, shipping, payment gateways, webhooks, and operational diagnostics.
 
 ## What It Does
 
@@ -282,7 +282,7 @@ wp plugin install mcp-abilities-for-woocommerce.zip --activate
 
 ## Recent Changes
 
-### 0.2.15
+### 0.2.16
 
 - Fixed confirmation field schemas for product creation and updates, and aligned product creation permissions with WooCommerce.
 - Included variations in product output types and returned whole-line decimal amounts for orders and refunds.

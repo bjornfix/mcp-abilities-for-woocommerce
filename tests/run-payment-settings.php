@@ -17,7 +17,7 @@ class Gateway {
 }
 class GatewayRegistry { public function payment_gateways() { return array( 'example' => new Gateway() ); } }
 function WC() { return new class { public function payment_gateways() { return new GatewayRegistry(); } }; }
-class WP_REST_Request extends ArrayObject { public function __construct( ...$args ) { parent::__construct(); } public function set_params( $values ) { $this->exchangeArray( $values ); } }
+class WP_REST_Request extends ArrayObject { public function __construct( ...$args ) { parent::__construct(); } public function set_body_params( $values ) { $this->exchangeArray( $values ); } }
 class WC_REST_Payment_Gateways_Controller {
 	public function update_item( $request ) {
 		$GLOBALS['calls']++;

@@ -184,7 +184,7 @@ final class MCP_WC_Commerce_Administration_Module {
 		foreach ( array( 'settings', 'enabled' ) as $field ) {
 			if ( array_key_exists( $field, $input ) ) { $params[ $field ] = $input[ $field ]; }
 		}
-		$request->set_params( $params );
+		$request->set_body_params( $params );
 		$result = ( new \WC_REST_Shipping_Zone_Methods_Controller() )->update_item( $request );
 		if ( is_wp_error( $result ) ) { return $result; }
 		$stored = \WC_Shipping_Zones::get_shipping_method( (int) $method->get_instance_id() );
@@ -216,7 +216,7 @@ final class MCP_WC_Commerce_Administration_Module {
 		foreach ( array( 'settings', 'enabled' ) as $field ) {
 			if ( array_key_exists( $field, $input ) ) { $params[ $field ] = $input[ $field ]; }
 		}
-		$request->set_params( $params );
+		$request->set_body_params( $params );
 		$result = ( new \WC_REST_Payment_Gateways_Controller() )->update_item( $request );
 		if ( is_wp_error( $result ) ) { return $result; }
 		$settings = get_option( $gateway->get_option_key(), array() );

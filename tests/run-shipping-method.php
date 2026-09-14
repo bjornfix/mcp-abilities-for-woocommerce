@@ -9,7 +9,7 @@ function current_user_can( ...$args ) { return true; }
 function is_wp_error( $v ) { return $v instanceof WP_Error; }
 function get_option( $key, $default ) { return $GLOBALS['options'][$key] ?? $default; }
 function update_option( $key, $value ) { $GLOBALS['options'][$key] = $value; return true; }
-class WP_REST_Request extends ArrayObject { public function __construct( ...$args ) { parent::__construct(); } public function set_params( $values ) { $this->exchangeArray( $values ); } }
+class WP_REST_Request extends ArrayObject { public function __construct( ...$args ) { parent::__construct(); } public function set_body_params( $values ) { $this->exchangeArray( $values ); } }
 class ShippingMethod {
 	public string $enabled;
 	public function __construct() { $this->enabled = $GLOBALS['native_enabled'] ? 'yes' : 'no'; }

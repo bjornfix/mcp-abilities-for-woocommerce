@@ -5,7 +5,7 @@ Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 8.0
 Requires Plugins: woocommerce
-Stable tag: 0.2.15
+Stable tag: 0.2.16
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -58,7 +58,7 @@ System tools are disabled by default. Explicitly allow only required tool IDs th
 
 == Changelog ==
 
-= 0.2.15 =
+= 0.2.16 =
 
 * Fixed product confirmation schemas, native create permissions and variation output types.
 * Returned whole-line decimal amounts for order and refund lines.

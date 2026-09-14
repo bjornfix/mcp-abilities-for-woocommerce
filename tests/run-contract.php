@@ -155,7 +155,7 @@ expect_true( str_contains( $administration, 'sanitize_country_codes' ) && str_co
 expect_true( str_contains( $administration, "if ( \$id < 1 )" ) && str_contains( $administration, "\$stored = \\WC_Tax::_get_tax_rate( \$id )" ) && str_contains( $administration, 'mcp_wc_tax_rate_delete_failed' ), 'Tax mutations must verify native IDs and read-after-write/delete postconditions.' );
 expect_true( str_contains( $products, "confirmation_schema( 'woocommerce-mcp/product-update' )" ) && str_contains( $products, 'set_category_ids' ), 'Catalog mutations must use confirmed WooCommerce CRUD writes.' );
 expect_true( false === str_contains( $main, "add_filter( 'woocommerce_currency_symbol'" ), 'The generic MCP plugin must not override storefront currency presentation.' );
-expect_true( str_contains( $main, 'Version: 0.2.15' ) && str_contains( source( 'readme.txt' ), 'Stable tag: 0.2.15' ), 'Runtime and package versions must stay aligned.' );
+expect_true( str_contains( $main, 'Version: 0.2.16' ) && str_contains( source( 'readme.txt' ), 'Stable tag: 0.2.16' ), 'Runtime and package versions must stay aligned.' );
 expect_true( str_contains( $main, 'Requires Plugins: woocommerce' ) && false === str_contains( $main, 'woocommerce, abilities-api' ), 'WordPress 6.9 core Abilities support must not be declared as a separate plugin dependency.' );
 
 $readme = source( 'README.md' );
@@ -174,7 +174,7 @@ if ( false !== $inventory_start && false !== $inventory_end && $inventory_end > 
 		expect_true( str_contains( $registration_source, "'woocommerce-mcp/{$short_name}'" ) || str_contains( $registration_source, "'woocommerce/{$short_name}'" ) || str_contains( $administration_abilities, "'{$short_name}'" ), 'Documented ability must have a source registration: ' . $ability_name );
 	}
 }
-expect_true( str_contains( $readme, '**Stable version:** 0.2.15' ) && str_contains( $readme, '**Tested with WordPress:** 7.1' ), 'README release metadata must stay aligned.' );
+expect_true( str_contains( $readme, '**Stable version:** 0.2.16' ) && str_contains( $readme, '**Tested with WordPress:** 7.1' ), 'README release metadata must stay aligned.' );
 expect_true( str_contains( $readme, '**Tags:** woocommerce, mcp, abilities, ai, automation' ), 'README tags must stay aligned with readme.txt.' );
 
 if ( $failures ) { fwrite( STDERR, "Contract failures:\n- " . implode( "\n- ", $failures ) . "\n" ); exit( 1 ); }

@@ -5,7 +5,7 @@ Requires at least: 6.9
 Tested up to: 7.1
 Requires PHP: 8.0
 Requires Plugins: woocommerce
-Stable tag: 0.2.16
+Stable tag: 0.2.17
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,6 +32,8 @@ Historical `woocommerce/*` names remain deprecated compatibility aliases only wh
 
 == Installation ==
 
+For update notifications in WordPress, install [Devenia MCP Updater](https://downloads.devenia.com/devenia-mcp-updater.zip). The updater is optional. You choose which plugins update automatically through WordPress.
+
 1. Install and activate WooCommerce.
 2. Upload and activate this plugin.
 3. Connect an Abilities API-compatible MCP adapter and discover `woocommerce-mcp/*` abilities.
@@ -57,6 +59,9 @@ Not by default. Add only specific approved keys through the `mcp_wc_allowed_prot
 System tools are disabled by default. Explicitly allow only required tool IDs through the `mcp_wc_allowed_system_tools` filter.
 
 == Changelog ==
+
+= 0.2.17 =
+* Add one dismissible Plugins-screen reminder when Devenia MCP Updater is missing or inactive, with persistent install or activate links. Automatic updates remain your choice in WordPress.
 
 = 0.2.16 =
 

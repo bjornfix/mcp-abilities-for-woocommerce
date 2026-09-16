@@ -1,18 +1,18 @@
 # MCP Abilities for WooCommerce
 
-[![Release](https://img.shields.io/badge/release-0.2.16-blue)](https://downloads.devenia.com/mcp-abilities-for-woocommerce.zip)
+[![Release](https://img.shields.io/badge/release-0.2.17-blue)](https://downloads.devenia.com/mcp-abilities-for-woocommerce.zip)
 [![License](https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 [![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-21759b.svg)](https://wordpress.org/)
 [![PHP](https://img.shields.io/badge/PHP-8.0%2B-777bb4.svg)](https://www.php.net/)
 
 Put an AI assistant to work on your WooCommerce catalogue, orders and shop settings. Find the right product variant, prepare a stock correction, inspect an order or create a coupon through named operations that use WooCommerce data.
 
-**Stable version:** 0.2.16<br>
+**Stable version:** 0.2.17<br>
 **Tested with WordPress:** 7.1<br>
 **License:** GPL-2.0-or-later<br>
 **Tags:** woocommerce, mcp, abilities, ai, automation
 
-Version 0.2.16 exposes 79 canonical abilities under `woocommerce-mcp/*`. They cover products, orders, customers, coupons, reviews, reports, store configuration, tax, shipping, payment gateways, webhooks, and operational diagnostics.
+Version 0.2.17 exposes 79 canonical abilities under `woocommerce-mcp/*`. They cover products, orders, customers, coupons, reviews, reports, store configuration, tax, shipping, payment gateways, webhooks, and operational diagnostics.
 
 ## What It Does
 
@@ -267,6 +267,9 @@ When `has_more` is `true`, pass `next_cursor_page` as the next request's `cursor
 
 ## Installation
 
+
+For update notifications in WordPress, install [Devenia MCP Updater](https://downloads.devenia.com/devenia-mcp-updater.zip). The updater is optional. You choose which plugins update automatically through WordPress.
+
 ### WordPress admin
 
 1. Download the [stable ZIP](https://downloads.devenia.com/mcp-abilities-for-woocommerce.zip).
@@ -281,6 +284,11 @@ wp plugin install mcp-abilities-for-woocommerce.zip --activate
 ```
 
 ## Recent Changes
+
+
+### 0.2.17
+
+Add one dismissible Plugins-screen reminder when Devenia MCP Updater is missing or inactive, with persistent install or activate links. Automatic updates remain your choice in WordPress.
 
 ### 0.2.16
 
